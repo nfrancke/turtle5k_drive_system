@@ -55,7 +55,7 @@ public:
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
 	int iMinPulseSpeed;
-	int iSerialPortId[10];
+	int iSerialPortId[10];							
 	
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
@@ -150,10 +150,10 @@ public:
 			ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);	
 		}
 
+		//Write data.
 		write(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cOutBuf,sizeof serialPorts[SERIAL_PORT_5].cOutBuf);
 		write(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cOutBuf,sizeof serialPorts[SERIAL_PORT_7].cOutBuf);
 		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
-
 	}
 
 private:
@@ -177,10 +177,12 @@ int main(int argc, char **argv  )
 	//create class
 	Subscribe Sobject(nh);
 
+	//open the serial ports and put the id number in a variable
 	Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NOCTTY | O_SYNC);
 	Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_SYNC);
 	Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NOCTTY | O_SYNC);
 
+	//control of all ports are opened correctly
 	if(Sobject.iSerialPortId[SERIAL_PORT_5] < 0){
 		ROS_INFO("serial port 5 is number %i,",Sobject.iSerialPortId[SERIAL_PORT_5]);
 	} else {
@@ -200,11 +202,12 @@ int main(int argc, char **argv  )
 		return -1;
 	}
 
+	//set parameters for serial communication
 	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_5], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_5], 0); // set no blocking
 	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_7], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
 	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_8], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_5], 0); // set no blocking
+	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 0); // set no blocking
 
 	//wait until a Float32MulitArray is received and run the callback function
@@ -221,6 +224,12 @@ End of main
 /*****************************************************************************************************************************************
 Functions
 ********************************************************************************************************************************************/
+
+/////////////////////////////////////////////////////////////////////////////
+//function: this function set the parameters for the serial port.
+//pre: 
+//post: -
+/////////////////////////////////////////////////////////////////////////////
 int set_interface_attribs (int fd, int speed, int parity)
 {
 	struct termios tty;
@@ -260,6 +269,11 @@ int set_interface_attribs (int fd, int speed, int parity)
 	return 0;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+//function: this function sets the blocking of te serial port.
+//pre: 
+//post: -
+/////////////////////////////////////////////////////////////////////////////
 void set_blocking (int fd, int should_block)
 {
 	struct termios tty;
