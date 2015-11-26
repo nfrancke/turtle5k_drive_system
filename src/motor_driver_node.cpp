@@ -16,7 +16,6 @@ Writer 		: Niek Francke
 date 		: 13-11-2015
 ********************************************************************************************************************************************/
 
-#include <SerialStream.h>
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
@@ -35,20 +34,12 @@ date 		: 13-11-2015
 #define TOPIC_NAME 					"mcWheelVelocityMps"
 #define TOPIC_BUFFER_SIZE			1
 
-#define USE_SERIALSTREAMH			0
-#define USE_TERMIOSH				1
-
 #define SERIAL_PORT_5				4
 #define SERIAL_PORT_7				6
 #define SERIAL_PORT_8				7
 
 using namespace std;
-using namespace LibSerial;
 
-//Define serial ports
-SerialStream serial_port5;
-SerialStream serial_port7;
-SerialStream serial_port8;
 
 int set_interface_attribs (int fd, int speed, int parity);
 void set_blocking (int fd, int should_block);
@@ -159,18 +150,10 @@ public:
 			ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);	
 		}
 
-		if(USE_TERMIOSH){
-			write(iSerialPortId[5], serialPorts[5-1].cOutBuf,sizeof serialPorts[5-1].cOutBuf);
-			write(iSerialPortId[7], serialPorts[7-1].cOutBuf,sizeof serialPorts[7-1].cOutBuf);
-			write(iSerialPortId[8], serialPorts[8-1].cOutBuf,sizeof serialPorts[8-1].cOutBuf);
-		}
+		write(iSerialPortId[5], serialPorts[5-1].cOutBuf,sizeof serialPorts[5-1].cOutBuf);
+		write(iSerialPortId[7], serialPorts[7-1].cOutBuf,sizeof serialPorts[7-1].cOutBuf);
+		write(iSerialPortId[8], serialPorts[8-1].cOutBuf,sizeof serialPorts[8-1].cOutBuf);
 
-		if(USE_SERIALSTREAMH){
-			//Write serial ports. the value will be minus 1 because it will match with the serialPorts array.	
-	      	serial_port5.write(serialPorts[5-1].cOutBuf, 8);
-	      	serial_port7.write(serialPorts[7-1].cOutBuf, 8);
-		   	serial_port8.write(serialPorts[8-1].cOutBuf, 8);
-	   	}
 	}
 
 private:
@@ -179,14 +162,6 @@ private:
 /*****************************************************************************************************************************************
 end of defining class Subscribe
 ********************************************************************************************************************************************/
-
-///////////////////////////////////////////////////////////////////////////////////////////
-//function: initialize serial port "string sSerialPort" as follows:
-//			baud = 115200, char_size = 8, parity = none, stop bits = 2 and no flauw control
-//pre: 
-//post: return 1 if its done. return 0 if it fails.		
-////////////////////////////////////////////////////////////////////////////////////////////
-bool initSerialPort(SerialStream& serial_port, string sSerialPort);
 
 /*****************************************************************************************************************************************
 Start of main
@@ -199,45 +174,30 @@ int main(int argc, char **argv  )
 	//create nodehandle
 	ros::NodeHandle nh;
 
-	if(USE_SERIALSTREAMH){
-		//check if init serial went good. otherwise close program.
-		if((initSerialPort(serial_port5,"/dev/ttyS5") 
-			&& initSerialPort(serial_port7,"/dev/ttyS7") 
-			&& initSerialPort(serial_port8,"/dev/ttyS8")) 
-			!= 1){
-		return 1;
-		}
-		ROS_INFO("All serial ports are initialized");	
-	}
-
 	//create class
 	Subscribe Sobject(nh);
 
-	if(USE_TERMIOSH){
-		Sobject.iSerialPortId[5] = open("/dev/ttyS5", O_RDWR | O_NOCTTY | O_SYNC);
-		Sobject.iSerialPortId[7] = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_SYNC);
-		Sobject.iSerialPortId[8] = open("/dev/ttyS8", O_RDWR | O_NOCTTY | O_SYNC);
+	Sobject.iSerialPortId[5] = open("/dev/ttyS5", O_RDWR | O_NOCTTY | O_SYNC);
+	Sobject.iSerialPortId[7] = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_SYNC);
+	Sobject.iSerialPortId[8] = open("/dev/ttyS8", O_RDWR | O_NOCTTY | O_SYNC);
 
-		if(Sobject.iSerialPortId[5] < 0){
-			ROS_INFO("serial port 5 is number %i,",Sobject.iSerialPortId[5]);
-		} else {
-			ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
-			return -1;
-		}
-
-		if(Sobject.iSerialPortId[7] < 0){
-			ROS_INFO("serial port 7 is number %i,",Sobject.iSerialPortId[5]);
-		}else {
-			ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
-			return -1;
-		}
-
-		if(Sobject.iSerialPortId[8] < 0){
-			ROS_INFO("serial port 8 is number %i,",Sobject.iSerialPortId[5]);
-		}else {
-			ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
-			return -1;
-		}
+	if(Sobject.iSerialPortId[5] < 0){
+		ROS_INFO("serial port 5 is number %i,",Sobject.iSerialPortId[5]);
+	} else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
+		return -1;
+	}
+	if(Sobject.iSerialPortId[7] < 0){
+		ROS_INFO("serial port 7 is number %i,",Sobject.iSerialPortId[5]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
+		return -1;
+	}
+	if(Sobject.iSerialPortId[8] < 0){
+		ROS_INFO("serial port 8 is number %i,",Sobject.iSerialPortId[5]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
+		return -1;
 	}
 
 	set_interface_attribs (Sobject.iSerialPortId[5], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
@@ -261,86 +221,6 @@ End of main
 /*****************************************************************************************************************************************
 Functions
 ********************************************************************************************************************************************/
-//////////////////////////////////////////////////////////////////////////////////////////////
-//function: initialize serial port "string sSerialPort" as follows:
-//			baud = 115200, char_size = 8, parity = none, stop bits = 2 and no flauw control
-//pre: 
-//post: return 1 if its done. return 0 if it fails.		
-//////////////////////////////////////////////////////////////////////////////////////////////
-bool initSerialPort(SerialStream& serialPort,string sSerialPort){
-	//
-	//Open the serial port
-	//
-	ROS_DEBUG("Serial Port will be opened");
-	//	serialPort.Open("/dev/ttyS8") ;
-	serialPort.Open(sSerialPort);
-	//check if serial port opens correctly
-	if ( ! serialPort.good() )
-    {
-		ROS_ERROR("Error: Could not open serial port.");
-		return 0;
-	}
-
-	ROS_INFO("Serial port is opened");
-
-	//
-	// Set the baud rate of the serial port.
-	//
-	serialPort.SetBaudRate( SerialStreamBuf::BAUD_115200 ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not set the baud rate.");
-		return 0;
-	}
-	ROS_INFO("baud rate is set");
-
-	//
-	// Set the number of data bits.
-	//
-	serialPort.SetCharSize( SerialStreamBuf::CHAR_SIZE_8 ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not set the character size.");
-		return 0;
-	}
-	ROS_INFO("char size is set");
-
-	//
-	// Disable parity.
-	//
-	serialPort.SetParity( SerialStreamBuf::PARITY_NONE ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not disable the parity.");
-		return 0;
-	}
-	ROS_INFO("parity is setted");
-
-	//
-	// Set the number of stop bits.
-	//
-	serialPort.SetNumOfStopBits( 2 ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not set the number of stop bits.");
-		return 0;
-	}
-	ROS_INFO("stop bits are set");
-
-	//
-	// Turn off hardware flow control.
-	//
-	serialPort.SetFlowControl( SerialStreamBuf::FLOW_CONTROL_NONE ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not use hardware flow control.");
-		return 0;
-	} 
-	ROS_INFO("Disabled flow control");
-
-return 1;
-}
-
 int set_interface_attribs (int fd, int speed, int parity)
 {
 	struct termios tty;
