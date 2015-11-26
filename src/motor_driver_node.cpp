@@ -57,6 +57,7 @@ public:
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
 	int iMinPulseSpeed;
+	int iSerialPortId[10];
 	
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
@@ -151,10 +152,16 @@ public:
 			ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);	
 		}
 
+		write(iSerialPortId[5], serialPorts[5-1].cOutBuf,sizeof serialPorts[5-1].cOutBuf);
+		write(iSerialPortId[7], serialPorts[7-1].cOutBuf,sizeof serialPorts[7-1].cOutBuf);
+		write(iSerialPortId[8], serialPorts[8-1].cOutBuf,sizeof serialPorts[8-1].cOutBuf);
+
+		/*
 		//Write serial ports. the value will be minus 1 because it will match with the serialPorts array.	
       	serial_port5.write(serialPorts[5-1].cOutBuf, 8);
       	serial_port7.write(serialPorts[7-1].cOutBuf, 8);
 	   	serial_port8.write(serialPorts[8-1].cOutBuf, 8);
+	   	*/
 	}
 
 private:
@@ -183,6 +190,7 @@ int main(int argc, char **argv  )
 	//create nodehandle
 	ros::NodeHandle nh;
 
+/*
 	//check if init serial went good. otherwise close program.
 	if((initSerialPort(serial_port5,"/dev/ttyS5") 
 		&& initSerialPort(serial_port7,"/dev/ttyS7") 
@@ -191,9 +199,42 @@ int main(int argc, char **argv  )
 	return 1;
 	}
 	ROS_INFO("All serial ports are initialized");	
+*/
 
 	//create class
 	Subscribe Sobject(nh);
+
+	Sobject.iSerialPortId[5] = open("/dev/ttyS5", O_RDWR | O_NOCTTY | O_SYNC);
+	Sobject.iSerialPortId[7] = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_SYNC);
+	Sobject.iSerialPortId[8] = open("/dev/ttyS8", O_RDWR | O_NOCTTY | O_SYNC);
+
+	if(Sobject.iSerialPortId[5] < 0){
+		ROS_INFO("serial port 5 is number %i,",Sobject.iSerialPortId[5]);
+	} else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
+		return -1;
+	}
+
+	if(Sobject.iSerialPortId[7] < 0){
+		ROS_INFO("serial port 7 is number %i,",Sobject.iSerialPortId[5]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
+		return -1;
+	}
+
+	if(Sobject.iSerialPortId[8] < 0){
+		ROS_INFO("serial port 8 is number %i,",Sobject.iSerialPortId[5]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
+		return -1;
+	}
+
+	set_interface_attribs (Sobject.iSerialPortId[5], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_blocking (Sobject.iSerialPortId[5], 0); // set no blocking
+	set_interface_attribs (Sobject.iSerialPortId[7], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_blocking (Sobject.iSerialPortId[7], 0); // set no blocking
+	set_interface_attribs (Sobject.iSerialPortId[8], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_blocking (Sobject.iSerialPortId[8], 0); // set no blocking
 
 	//wait until a Float32MulitArray is received and run the callback function
 	ros::spin();
