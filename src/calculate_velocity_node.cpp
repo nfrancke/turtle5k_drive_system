@@ -31,16 +31,17 @@ date 		: 18-11-2015
 #include <math.h>
 
 //-----settings
-#define PUBLISH_TOPIC_NAME 			"mcWheelVelocityMps"
-#define SUBSCRIBE_TOPIC_NAME		"motorspeed_set"
-#define SUBSCRIBE_TOPIC_BUFFER_SIZE	1
-#define PUBLISH_TOPIC_BUFFER_SIZE	1
-#define ANGLE_1						0 	//degrees
-#define ANGLE_2						120 //degrees
-#define ANGLE_3						240 //degrees
-#define THETA						30	//degrees
-#define RADIUS_OMNI_WHEEL			0.1016/2 //meter
-#define RADIUS_DRIVING_SYSTEM		0.22 //meter
+#define PUBLISH_TOPIC_NAME 						"mcWheelVelocityMps"
+#define SUBSCRIBE_TOPIC_NAME					"motorspeed_set"
+#define SUBSCRIBE_TOPIC_BUFFER_SIZE				1
+#define PUBLISH_TOPIC_BUFFER_SIZE				1
+#define ANGLE_1									0 	//degrees
+#define ANGLE_2									120 //degrees
+#define ANGLE_3									240 //degrees
+#define THETA									30	//degrees
+#define RADIUS_OMNI_WHEEL						0.1016/2 //meter
+#define RADIUS_DRIVING_SYSTEM					0.22 //meter
+#define MOTOR_TO_WHEEL_TRANSMISSION_RATIO 		12
 
 using namespace std;
 
@@ -95,7 +96,9 @@ public:
 		ROS_DEBUG("angle3 is %f pi radians and %i degrees" , (fAngle3/M_PI), ANGLE_3);
 		ROS_DEBUG("theta is %f pi radians and %i degrees" , (fTheta/M_PI), THETA);
 		float fRadiusOmniwheel = RADIUS_OMNI_WHEEL;	//this is needed, because the define won't work in a formule. (i don't know why)
-		ROS_DEBUG("radius omni wheel: %f", fRadiusOmniwheel);	
+		ROS_DEBUG("radius omni wheel: %f", fRadiusOmniwheel);
+		float fMotorToWheelTransmissionRatio = MOTOR_TO_WHEEL_TRANSMISSION_RATIO;	
+		ROS_DEBUG("radius omni wheel: %f", fMotorToWheelTransmissionRatio);
 
 		float fSpeedWheel[10];
 
@@ -112,10 +115,11 @@ public:
 		ROS_DEBUG("speed wheel 2 rad/s = %f", fSpeedWheel[5]);
 		ROS_DEBUG("speed wheel 3 rad/s = %f", fSpeedWheel[8]);
 
-		//convert rad/s to radian
+		//convert rad/s to radian and convert motor rpm to wheel RPM
 		//RPM = rad * 60/2pi
 		for(int i = 0 ; i < 10 ; i++){
 			fSpeedWheel[i] = fSpeedWheel[i] * (60 / ( 2 * M_PI));
+			fSpeedWheel[i] = fSpeedWheel[i] * fMotorToWheelTransmissionRatio;
 		}
 
 		//Debug messages
