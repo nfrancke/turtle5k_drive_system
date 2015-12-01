@@ -15,18 +15,7 @@
   <param name="dScaleAxisZ" value="2" type="double"/>
 
   <!-- Set drivers node -->
-	<node pkg="JoystickTurtle5k" type="MotorDriversSetNodeTwist" name="MotorDriverTwist"/>
-
- <!-- Motor node params -->
-	<param name= "iConvertFactor" value = "1" />
-	<param name= "iMaxPulseSpeed" value = "150" />
-	<param name= "iMinPulseSpeed" value = "-150" />
-
- <!-- set Motor node -->
- 	<node pkg =	"motordrive" type = "uart" name	="uart" required = "true" output = "screen"/>
-
- <!-- set velocity node -->
-	<node pkg =	"calculate_velocity" type = "calculate_velocity_node" name ="calculate_velocity_node" required = "true" output = "screen"/>
+	<node pkg="turtle5k_drive_system" type="joystick_to_twist_node" name="joystick_to_twist_node"/>
 
 </launch>
 <!-- %EndTag(FULL)%-->

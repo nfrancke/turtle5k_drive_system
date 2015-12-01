@@ -23,7 +23,7 @@
 	<param name= "iMinPulseSpeed" value = "-150" />
 
  <!-- set Motor node -->
- 	<node pkg =	"motordrive" type = "uart" name	="uart" required = "true" output = "screen"/>
+ <!	-- <node pkg =	"motordrive" type = "uart" name	="uart" required = "true" output = "screen"/> -->
 
  <!-- set velocity node -->
 	<node pkg =	"calculate_velocity" type = "calculate_velocity_node" name ="calculate_velocity_node" required = "true" output = "screen"/>
