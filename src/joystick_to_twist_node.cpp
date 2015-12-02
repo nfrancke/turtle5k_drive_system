@@ -16,7 +16,7 @@ date 		: 1-12-2015
 #include <geometry_msgs/Twist.h>
 #include <sensor_msgs/Joy.h>
 
-#define ROS_FRAME_RATE 100
+#define ROS_FRAME_RATE 					100
 #define SUB_TOPIC_NAME 					"joy"
 #define SUB_TOPIC_BUFFER_SIZE			1
 #define PUB_TOPIC_NAME 					"mcWheelVelocityMps"
