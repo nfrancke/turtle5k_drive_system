@@ -33,6 +33,8 @@ date 		: 13-11-2015
 #define MOTORDRIVER_END_OF_FRAME	0x00
 #define TOPIC_NAME 					"mcWheelVelocityMps"
 #define TOPIC_BUFFER_SIZE			1
+#define PUB_TOPIC_NAME				"motorspeed_feedback"
+#define PUB_TOPIC_BUFFER_SIZE		1
 
 #define SERIAL_PORT_5				4
 #define SERIAL_PORT_7				6
@@ -50,7 +52,7 @@ Start defining class Subscribe
 class Subscribe
 {
 public:
-	struct Output{ char cOutBuf[8]; int iSpeed;};	//data for serialports
+	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[1000];};	//data for serialports
 	Output serialPorts[10];							
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
@@ -65,6 +67,8 @@ public:
 	Subscribe(ros::NodeHandle nh)
 	{
 		sub = nh.subscribe(TOPIC_NAME,TOPIC_BUFFER_SIZE, &Subscribe::commandRpmReceived, this);
+
+		pub = nh.advertise<std_msgs::Float32MultiArray>(PUB_TOPIC_NAME, PUB_TOPIC_BUFFER_SIZE);
 		
 		//Reading param. This param will be used to convert the data from RPM to pulses.
 		std::string sParamName = "iConvertFactor";
@@ -156,8 +160,59 @@ public:
 		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
 	}
 
+	bool readSerialPort(){
+		//create multiarray
+		std_msgs::Float32MultiArray msg;
+	
+		if ((read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))>0){
+			iSerial5NewData = true;
+		}
+		if ((read(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cInBuf,sizeof serialPorts[SERIAL_PORT_7].cInBuf))>0){
+			iSerial7NewData = true;
+		}
+		if ((read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))>0){
+			iSerial8NewData = true;
+		} 
+
+		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){
+			
+			int iEncoderData;
+
+			//put speedvalues into array
+			msg.data.clear();
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			msg.data.push_back(iEncoderData);
+			msg.data.push_back(0);
+			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			msg.data.push_back(iEncoderData);
+			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+			msg.data.push_back(iEncoderData);
+			msg.data.push_back(0);
+
+			//send message
+			pub.publish(msg);
+
+			//clear markers
+			iSerial5NewData = false;
+			iSerial7NewData = false;
+			iSerial8NewData = false;
+			ROS_DEBUG("Send encoder data");
+			return 1;
+		}else{
+			return 0;
+		}
+	}
+
 private:
 	ros::Subscriber sub;	//define ros subscriber
+	ros::Publisher	pub;	//define ros publisher
+	bool iSerial5NewData;
+	bool iSerial7NewData;
+	bool iSerial8NewData;
 };
 /*****************************************************************************************************************************************
 end of defining class Subscribe
@@ -210,8 +265,13 @@ int main(int argc, char **argv  )
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 0); // set no blocking
 
-	//wait until a Float32MulitArray is received and run the callback function
-	ros::spin();
+	while(ros::ok())
+	{
+ 		Sobject.readSerialPort();
+
+		//wait until a Float32MulitArray is received and run the callback function
+		ros::spinOnce();
+	}
 
 	return 0;
 }
