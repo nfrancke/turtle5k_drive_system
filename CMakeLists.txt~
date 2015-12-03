@@ -134,6 +134,8 @@ include_directories(include
 add_executable(motor_driver_node src/motor_driver_node.cpp)
 add_executable(rpm_sender_multi_array_node src/rpm_sender_multi_array_node.cpp)
 add_executable(calculate_velocity_node src/calculate_velocity_node.cpp)
+add_executable(joystick_to_rpm_multiarray_node src/joystick_to_rpm_multiarray_node.cpp)
+add_executable(joystick_to_twist_node src/joystick_to_twist_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -143,6 +145,8 @@ add_executable(calculate_velocity_node src/calculate_velocity_node.cpp)
 target_link_libraries(motor_driver_node ${catkin_LIBRARIES} serial)
 target_link_libraries( rpm_sender_multi_array_node ${catkin_LIBRARIES})
 target_link_libraries(calculate_velocity_node ${catkin_LIBRARIES})
+target_link_libraries(joystick_to_rpm_multiarray_node ${catkin_LIBRARIES})
+target_link_libraries(joystick_to_twist_node ${catkin_LIBRARIES})
 
 #############
 ## Install ##

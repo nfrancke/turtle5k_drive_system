@@ -19,7 +19,7 @@ date 		: 1-12-2015
 #define ROS_FRAME_RATE 					100
 #define SUB_TOPIC_NAME 					"joy"
 #define SUB_TOPIC_BUFFER_SIZE			1
-#define PUB_TOPIC_NAME 					"mcWheelVelocityMps"
+#define PUB_TOPIC_NAME 					"motorspeed_set"
 #define PUB_TOPIC_BUFFER_SIZE			1
 
 

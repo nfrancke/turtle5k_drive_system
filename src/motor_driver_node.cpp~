@@ -16,13 +16,15 @@ Writer 		: Niek Francke
 date 		: 13-11-2015
 ********************************************************************************************************************************************/
 
-#include <SerialStream.h>
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
 #include <string>
 #include <std_msgs/Float32MultiArray.h>
 #include "ros/ros.h"
+#include <termios.h>
+#include <fcntl.h>
+#include <errno.h>
 
 //-----settings
 #define MOTORDRIVER_START_OF_FRAME 	0x5a
@@ -31,15 +33,18 @@ date 		: 13-11-2015
 #define MOTORDRIVER_END_OF_FRAME	0x00
 #define TOPIC_NAME 					"mcWheelVelocityMps"
 #define TOPIC_BUFFER_SIZE			1
+#define PUB_TOPIC_NAME				"motorspeed_feedback"
+#define PUB_TOPIC_BUFFER_SIZE		1
+
+#define SERIAL_PORT_5				4
+#define SERIAL_PORT_7				6
+#define SERIAL_PORT_8				7
 
 using namespace std;
-using namespace LibSerial;
 
-//Define serial ports
-SerialStream serial_port5;
-SerialStream serial_port7;
-SerialStream serial_port8;
 
+int set_interface_attribs (int fd, int speed, int parity);
+void set_blocking (int fd, int should_block);
 
 /*****************************************************************************************************************************************
 Start defining class Subscribe
@@ -47,11 +52,12 @@ Start defining class Subscribe
 class Subscribe
 {
 public:
-	struct Output{ char cOutBuf[8]; int iSpeed;};	//data for serialports
+	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[1000];};	//data for serialports
 	Output serialPorts[10];							
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
 	int iMinPulseSpeed;
+	int iSerialPortId[10];							
 	
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
@@ -61,6 +67,8 @@ public:
 	Subscribe(ros::NodeHandle nh)
 	{
 		sub = nh.subscribe(TOPIC_NAME,TOPIC_BUFFER_SIZE, &Subscribe::commandRpmReceived, this);
+
+		pub = nh.advertise<std_msgs::Float32MultiArray>(PUB_TOPIC_NAME, PUB_TOPIC_BUFFER_SIZE);
 		
 		//Reading param. This param will be used to convert the data from RPM to pulses.
 		std::string sParamName = "iConvertFactor";
@@ -146,26 +154,69 @@ public:
 			ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);	
 		}
 
-		//Write serial ports. the value will be minus 1 because it will match with the serialPorts array.	
-      	serial_port5.write(serialPorts[5-1].cOutBuf, 8);
-      	serial_port7.write(serialPorts[7-1].cOutBuf, 8);
-	   	serial_port8.write(serialPorts[8-1].cOutBuf, 8);
+		//Write data.
+		write(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cOutBuf,sizeof serialPorts[SERIAL_PORT_5].cOutBuf);
+		write(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cOutBuf,sizeof serialPorts[SERIAL_PORT_7].cOutBuf);
+		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
+	}
+
+	bool readSerialPort(){
+		//create multiarray
+		std_msgs::Float32MultiArray msg;
+	
+		if ((read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))>0){
+			iSerial5NewData = true;
+		}
+		if ((read(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cInBuf,sizeof serialPorts[SERIAL_PORT_7].cInBuf))>0){
+			iSerial7NewData = true;
+		}
+		if ((read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))>0){
+			iSerial8NewData = true;
+		} 
+
+		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){
+			
+			int iEncoderData;
+
+			//put speedvalues into array
+			msg.data.clear();
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			msg.data.push_back(0);
+			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			msg.data.push_back(iEncoderData);
+			msg.data.push_back(0);
+			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			msg.data.push_back(iEncoderData);
+			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+			msg.data.push_back(iEncoderData);
+			msg.data.push_back(0);
+
+			//send message
+			pub.publish(msg);
+
+			//clear markers
+			iSerial5NewData = false;
+			iSerial7NewData = false;
+			iSerial8NewData = false;
+			ROS_DEBUG("Send encoder data");
+			return 1;
+		}else{
+			return 0;
+		}
 	}
 
 private:
 	ros::Subscriber sub;	//define ros subscriber
+	ros::Publisher	pub;	//define ros publisher
+	bool iSerial5NewData;
+	bool iSerial7NewData;
+	bool iSerial8NewData;
 };
 /*****************************************************************************************************************************************
 end of defining class Subscribe
 ********************************************************************************************************************************************/
-
-///////////////////////////////////////////////////////////////////////////////////////////
-//function: initialize serial port "string sSerialPort" as follows:
-//			baud = 115200, char_size = 8, parity = none, stop bits = 2 and no flauw control
-//pre: 
-//post: return 1 if its done. return 0 if it fails.		
-////////////////////////////////////////////////////////////////////////////////////////////
-bool initSerialPort(SerialStream& serial_port, string sSerialPort);
 
 /*****************************************************************************************************************************************
 Start of main
@@ -178,20 +229,57 @@ int main(int argc, char **argv  )
 	//create nodehandle
 	ros::NodeHandle nh;
 
-	//check if init serial went good. otherwise close program.
-	if((initSerialPort(serial_port5,"/dev/ttyS5") 
-		&& initSerialPort(serial_port7,"/dev/ttyS7") 
-		&& initSerialPort(serial_port8,"/dev/ttyS8")) 
-		!= 1){
-	return 1;
-	}
-	ROS_INFO("All serial ports are initialized");	
-
 	//create class
 	Subscribe Sobject(nh);
+	
+	ROS_INFO("Serial Ports will be initialized");
 
-	//wait until a Float32MulitArray is received and run the callback function
-	ros::spin();
+	//open the serial ports and put the id number in a variable
+	Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 5 are connected to hardware");
+	Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 7 are connected to hardware");
+	Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 8 are connected to hardware");
+
+	//control of all ports are opened correctly
+	if(Sobject.iSerialPortId[SERIAL_PORT_5] > 0){
+		ROS_INFO("serial port 5 is number %i",Sobject.iSerialPortId[SERIAL_PORT_5]);
+	} else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
+		return -1;
+	}
+	if(Sobject.iSerialPortId[SERIAL_PORT_7] > 0){
+		ROS_INFO("serial port 7 is number %i",Sobject.iSerialPortId[SERIAL_PORT_7]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
+		return -1;
+	}
+	if(Sobject.iSerialPortId[SERIAL_PORT_8] > 0){
+		ROS_INFO("serial port 8 is number %i",Sobject.iSerialPortId[SERIAL_PORT_8]);
+	}else {
+		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
+		return -1;
+	}
+
+	//set parameters for serial communication
+	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_5], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_7], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_8], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
+	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_5], 1); // set no blocking
+	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 1); // set no blocking
+	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 1); // set no blocking
+
+	ROS_INFO("Serial ports are initialized");
+
+//	while(ros::ok())
+//	{
+//		Sobject.readSerialPort();
+
+		//wait until a Float32MulitArray is received and run the callback function
+//		ros::spinOnce();
+		ros::spin();
+//	}
 
 	return 0;
 }
@@ -204,84 +292,72 @@ End of main
 /*****************************************************************************************************************************************
 Functions
 ********************************************************************************************************************************************/
-//////////////////////////////////////////////////////////////////////////////////////////////
-//function: initialize serial port "string sSerialPort" as follows:
-//			baud = 115200, char_size = 8, parity = none, stop bits = 2 and no flauw control
+
+/////////////////////////////////////////////////////////////////////////////
+//function: this function set the parameters for the serial port.
 //pre: 
-//post: return 1 if its done. return 0 if it fails.		
-//////////////////////////////////////////////////////////////////////////////////////////////
-bool initSerialPort(SerialStream& serialPort,string sSerialPort){
-	//
-	//Open the serial port
-	//
-	ROS_DEBUG("Serial Port will be opened");
-	//	serialPort.Open("/dev/ttyS8") ;
-	serialPort.Open(sSerialPort);
-	//check if serial port opens correctly
-	if ( ! serialPort.good() )
-    {
-		ROS_ERROR("Error: Could not open serial port.");
-		return 0;
+//post: -
+/////////////////////////////////////////////////////////////////////////////
+int set_interface_attribs (int fd, int speed, int parity)
+{
+	struct termios tty;
+	memset (&tty, 0, sizeof tty);
+
+	if (tcgetattr (fd, &tty) != 0)
+	{
+		ROS_ERROR("error %d from tcgetattr", errno);
+		return -1;
 	}
 
-	ROS_INFO("Serial port is opened");
+	cfsetospeed (&tty, speed);
+	cfsetispeed (&tty, speed);
+	tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8; // 8-bit chars
+	// disable IGNBRK for mismatched speed tests; otherwise receive break
+	// as \000 chars
+	tty.c_iflag &= ~IGNBRK; // disable break processing
+	tty.c_lflag = 0; // no signaling chars, no echo,
+	// no canonical processing
+	tty.c_oflag = 0; // no remapping, no delays
+	tty.c_cc[VMIN] = 0; // read doesn't block
+	tty.c_cc[VTIME] = 5; // 0.5 seconds read timeout
+	tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
+	tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
+	// enable reading
+	tty.c_cflag &= ~(PARENB | PARODD); // shut off parity
+	tty.c_cflag |= parity;
+	//tty.c_cflag &= ~CSTOPB;
+	tty.c_cflag |= CSTOPB; //2 stop bits
+	tty.c_cflag &= ~CRTSCTS;
 
-	//
-	// Set the baud rate of the serial port.
-	//
-	serialPort.SetBaudRate( SerialStreamBuf::BAUD_115200 ) ;
-	if ( ! serialPort.good() )
+	if (tcsetattr (fd, TCSANOW, &tty) != 0)
 	{
-		ROS_ERROR("Error: Could not set the baud rate.");
-		return 0;
+		ROS_ERROR ("error %d from tcsetattr", errno);
+		return 1;
 	}
-	ROS_INFO("baud rate is set");
+	return 0;
+}
 
-	//
-	// Set the number of data bits.
-	//
-	serialPort.SetCharSize( SerialStreamBuf::CHAR_SIZE_8 ) ;
-	if ( ! serialPort.good() )
+/////////////////////////////////////////////////////////////////////////////
+//function: this function sets the blocking of te serial port.
+//pre: 
+//post: -
+/////////////////////////////////////////////////////////////////////////////
+void set_blocking (int fd, int should_block)
+{
+	struct termios tty;
+	memset (&tty, 0, sizeof tty);
+	
+	if (tcgetattr (fd, &tty) != 0)
 	{
-		ROS_ERROR("Error: Could not set the character size.");
-		return 0;
+		ROS_ERROR ("error %d from tggetattr", errno);
 	}
-	ROS_INFO("char size is set");
 
-	//
-	// Disable parity.
-	//
-	serialPort.SetParity( SerialStreamBuf::PARITY_NONE ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not disable the parity.");
-		return 0;
+	tty.c_cc[VMIN] = should_block ? 1 : 0;
+	tty.c_cc[VTIME] = 5; // 0.5 seconds read timeout
+
+	if (tcsetattr (fd, TCSANOW, &tty) != 0){
+		ROS_ERROR ("error %d setting term attributes", errno);
 	}
-	ROS_INFO("parity is setted");
-
-	//
-	// Set the number of stop bits.
-	//
-	serialPort.SetNumOfStopBits( 2 ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not set the number of stop bits.");
-		return 0;
-	}
-	ROS_INFO("stop bits are set");
-
-	//
-	// Turn off hardware flow control.
-	//
-	serialPort.SetFlowControl( SerialStreamBuf::FLOW_CONTROL_NONE ) ;
-	if ( ! serialPort.good() )
-	{
-		ROS_ERROR("Error: Could not use hardware flow control.");
-		return 0;
-	} 
-	ROS_INFO("Disabled flow control");
-
-return 1;
 }
 /*****************************************************************************************************************************************
 End of functions

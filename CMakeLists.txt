@@ -7,7 +7,7 @@ project(turtle5k_drive_system)
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	std_msgs
-	serial
+#	serial
 )
 
 ## System dependencies are found with CMake's conventions
@@ -142,7 +142,7 @@ add_executable(joystick_to_twist_node src/joystick_to_twist_node.cpp)
 # add_dependencies(turtle5k_drive_system_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(motor_driver_node ${catkin_LIBRARIES} serial)
+target_link_libraries(motor_driver_node ${catkin_LIBRARIES}) #serial)
 target_link_libraries( rpm_sender_multi_array_node ${catkin_LIBRARIES})
 target_link_libraries(calculate_velocity_node ${catkin_LIBRARIES})
 target_link_libraries(joystick_to_rpm_multiarray_node ${catkin_LIBRARIES})

@@ -52,7 +52,7 @@ Start defining class Subscribe
 class Subscribe
 {
 public:
-	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[1000];};	//data for serialports
+	struct Output{ char cOutBuf[8]; int iSpeed; unsigned char cInBuf[1000];};	//data for serialports
 	Output serialPorts[10];							
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
@@ -178,18 +178,22 @@ public:
 			
 			int iEncoderData;
 
+			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_7].cInBuf[4],serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
+
 			//put speedvalues into array
 			msg.data.clear();
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			msg.data.push_back(0);
-			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
-			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
 			msg.data.push_back(iEncoderData);
-			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) || (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 
@@ -200,7 +204,7 @@ public:
 			iSerial5NewData = false;
 			iSerial7NewData = false;
 			iSerial8NewData = false;
-			ROS_DEBUG("Send encoder data");
+			ROS_INFO("Send encoder data");
 			return 1;
 		}else{
 			return 0;
@@ -231,27 +235,36 @@ int main(int argc, char **argv  )
 
 	//create class
 	Subscribe Sobject(nh);
+	
+	ROS_INFO("Serial Ports will be initialized");
+	ROS_DEBUG("O_NONBLOCK = %i", O_NONBLOCK);
 
 	//open the serial ports and put the id number in a variable
-	Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NOCTTY | O_SYNC);
-	Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NOCTTY | O_SYNC);
-	Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NOCTTY | O_SYNC);
+	//O_RWDR = open for reading and writing
+	//O_NOCTTY = the port never becomes the controlling terminal of the process
+	//O_NDELAY = use non-blocking i/o. on some system this is also means the rs232 dcd signal line is ignored.	
+	Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 5 are connected to hardware");
+	Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 7 are connected to hardware");
+	Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+	ROS_INFO("Serial port 8 are connected to hardware");
 
 	//control of all ports are opened correctly
-	if(Sobject.iSerialPortId[SERIAL_PORT_5] < 0){
-		ROS_INFO("serial port 5 is number %i,",Sobject.iSerialPortId[SERIAL_PORT_5]);
+	if(Sobject.iSerialPortId[SERIAL_PORT_5] > 0){
+		ROS_INFO("serial port 5 is number %i",Sobject.iSerialPortId[SERIAL_PORT_5]);
 	} else {
 		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
 		return -1;
 	}
-	if(Sobject.iSerialPortId[SERIAL_PORT_7] < 0){
-		ROS_INFO("serial port 7 is number %i,",Sobject.iSerialPortId[SERIAL_PORT_7]);
+	if(Sobject.iSerialPortId[SERIAL_PORT_7] > 0){
+		ROS_INFO("serial port 7 is number %i",Sobject.iSerialPortId[SERIAL_PORT_7]);
 	}else {
 		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
 		return -1;
 	}
-	if(Sobject.iSerialPortId[SERIAL_PORT_8] < 0){
-		ROS_INFO("serial port 8 is number %i,",Sobject.iSerialPortId[SERIAL_PORT_8]);
+	if(Sobject.iSerialPortId[SERIAL_PORT_8] > 0){
+		ROS_INFO("serial port 8 is number %i",Sobject.iSerialPortId[SERIAL_PORT_8]);
 	}else {
 		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
 		return -1;
@@ -265,12 +278,15 @@ int main(int argc, char **argv  )
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 0); // set no blocking
 
+	ROS_INFO("Serial ports are initialized");
+
 	while(ros::ok())
 	{
- 		Sobject.readSerialPort();
+		Sobject.readSerialPort();
 
 		//wait until a Float32MulitArray is received and run the callback function
 		ros::spinOnce();
+//		ros::spin();
 	}
 
 	return 0;
@@ -307,7 +323,9 @@ int set_interface_attribs (int fd, int speed, int parity)
 	// disable IGNBRK for mismatched speed tests; otherwise receive break
 	// as \000 chars
 	tty.c_iflag &= ~IGNBRK; // disable break processing
-	tty.c_lflag = 0; // no signaling chars, no echo,
+//	tty.c_lflag = 0; // no signaling chars, no echo,
+	// no canonical processing
+	tty.c_lflag &= ~ICANON; // no signaling chars, no echo,
 	// no canonical processing
 	tty.c_oflag = 0; // no remapping, no delays
 	tty.c_cc[VMIN] = 0; // read doesn't block
@@ -319,7 +337,7 @@ int set_interface_attribs (int fd, int speed, int parity)
 	tty.c_cflag |= parity;
 	//tty.c_cflag &= ~CSTOPB;
 	tty.c_cflag |= CSTOPB; //2 stop bits
-	tty.c_cflag &= ~CRTSCTS;
+	tty.c_cflag &= ~CRTSCTS; //disable hardware flow control
 
 	if (tcsetattr (fd, TCSANOW, &tty) != 0)
 	{
