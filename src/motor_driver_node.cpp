@@ -29,7 +29,9 @@ date 		: 13-11-2015
 //-----settings
 #define MOTORDRIVER_START_OF_FRAME 	0x5a
 #define MOTORDRIVER_TYPE 			0xaa
+#define MOTORDRIVER_TYPE_RECEIVE	0x55
 #define MOTORDRIVER_CMD				0x03
+#define MOTORDRIVER_CMD_RECEIVE		0x01
 #define MOTORDRIVER_END_OF_FRAME	0x00
 #define TOPIC_NAME 					"mcWheelVelocityMps"
 #define TOPIC_BUFFER_SIZE			1
@@ -163,7 +165,26 @@ public:
 	bool readSerialPort(){
 		//create multiarray
 		std_msgs::Float32MultiArray msg;
-	
+		
+		/*
+		//read data
+		for(int x = 0; x < 3; x++){
+			int i = 20; // value that has no port.
+			
+			//change values for serial ports
+			switch(x){
+				case 0: i = SERIAL_PORT_5; break;
+				case 1: i = SERIAL_PORT_7; break;
+				case 2: i = SERIAL_PORT_8; break;
+			}
+			ROS_INFO("%i", i);
+
+			if ((read(iSerialPortId[i], serialPorts[i].cInBuf, sizeof serialPorts[i].cInBuf))>0){
+				iSerialNewData[i] = true;
+			}
+		}
+		*/
+		
 		if ((read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))>0){
 			iSerial5NewData = true;
 		}
@@ -173,14 +194,15 @@ public:
 		if ((read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))>0){
 			iSerial8NewData = true;
 		} 
+		
 
-		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){
-			
+//		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){
+		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){			
 			int iEncoderData;
 
-			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
-			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_7].cInBuf[4],serialPorts[SERIAL_PORT_7].cInBuf[3]);
-			ROS_INFO("data encoder:%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
+			ROS_INFO("data encoder wiel 5:0x%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			ROS_INFO("data encoder wiel 7:0x%x%x", serialPorts[SERIAL_PORT_7].cInBuf[4],serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			ROS_INFO("data encoder wiel 8:0x%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
 
 			//put speedvalues into array
 			msg.data.clear();
@@ -189,23 +211,32 @@ public:
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			ROS_INFO("data encoder wiel 5:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+			ROS_INFO("data encoder wiel 7:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+			ROS_INFO("data encoder wiel 8:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 
 			//send message
 			pub.publish(msg);
 
+			/*
 			//clear markers
-			iSerial5NewData = false;
-			iSerial7NewData = false;
-			iSerial8NewData = false;
+			for(int i = 0; i < 10 ; i++){
+				iSerialNewData[i] = false;
+			}
+			*/
+
+			iSerial5NewData = 0;
+			iSerial7NewData = 0;
+			iSerial8NewData = 0;
 			
-			ROS_INFO("Send encoder data");
+			ROS_DEBUG("encoder data send");
 			return 1;
 		}else{
 			return 0;
@@ -215,6 +246,7 @@ public:
 private:
 	ros::Subscriber sub;	//define ros subscriber
 	ros::Publisher	pub;	//define ros publisher
+	bool iSerialNewData[10];
 	bool iSerial5NewData;
 	bool iSerial7NewData;
 	bool iSerial8NewData;
