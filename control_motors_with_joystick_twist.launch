@@ -10,9 +10,9 @@
   <param name="iAxisX" value="1" type="int"/>
   <param name="iAxisY" value="0" type="int"/>
   <param name="iAxisZ" value="3" type="int"/>
-  <param name="dScaleAxisX" value="2" type="double"/>
-  <param name="dScaleAxisY" value="2" type="double"/>
-  <param name="dScaleAxisZ" value="2" type="double"/>
+  <param name="dScaleAxisX" value="0.2" type="double"/>
+  <param name="dScaleAxisY" value="0.2" type="double"/>
+  <param name="dScaleAxisZ" value="0.2" type="double"/>
 
   <!-- Set drivers node -->
 	<node pkg="turtle5k_drive_system" type="joystick_to_twist_node" name="joystick_to_twist_node" required = "true" output = "screen"/>

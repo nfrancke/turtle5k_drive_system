@@ -150,8 +150,8 @@ void Subscriber::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 {
 	// read and calculate speedvalues
 	dVelAxisX = dScaleAxisX*joy->axes[iAxisX];
-	dVelAxisY = dScaleAxisY*joy->axes[iAxisY];
-	dVelAxisZ = dScaleAxisZ*joy->axes[iAxisZ];
+	dVelAxisY = -dScaleAxisY*joy->axes[iAxisY]; //inverted for the right direction
+	dVelAxisZ = -dScaleAxisZ*joy->axes[iAxisZ]; //inverted for the right direction
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////

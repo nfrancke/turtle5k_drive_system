@@ -204,6 +204,7 @@ public:
 			iSerial5NewData = false;
 			iSerial7NewData = false;
 			iSerial8NewData = false;
+			
 			ROS_INFO("Send encoder data");
 			return 1;
 		}else{
