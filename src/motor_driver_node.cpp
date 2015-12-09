@@ -43,7 +43,7 @@ date 		: 13-11-2015
 #define SERIAL_PORT_8				7
 
 #define OPEN_WITH_NONBLOCK 			0
-#define READ_RS422_ON				0
+#define READ_RS422_ON				1
 
 #define DEBUG_SPEED					100
 
@@ -62,7 +62,7 @@ Start defining class Subscribe
 class Subscribe
 {
 public:
-	struct Output{ char cOutBuf[8]; int iSpeed; unsigned char cInBuf[1000];};	//data for serialports
+	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[8];};	//data for serialports
 	Output serialPorts[10];							
 	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
 	int iMaxPulseSpeed; 
@@ -229,6 +229,8 @@ public:
 		//create multiarray
 		std_msgs::Float32MultiArray msg;
 		
+
+		int iNumberOfReceiveBytes, iWantedNumberOfReceiveBytes;
 		//read data
 		for(int x = 0; x < 3; x++){
 			int iPort = 20; // value that has no port.
@@ -240,10 +242,13 @@ public:
 				case 2: iPort = SERIAL_PORT_8; break;
 			}
 
-		if (sizeof serialPorts[iPort] == (read(iSerialPortId[iPort], serialPorts[iPort].cInBuf,sizeof serialPorts[iPort].cInBuf))){
-				iSerialNewData[iPort] = true;
+		iNumberOfReceiveBytes = read(iSerialPortId[iPort], serialPorts[iPort].cInBuf,sizeof serialPorts[iPort].cInBuf);
+		iWantedNumberOfReceiveBytes = sizeof serialPorts[iPort].cInBuf;
+
+		if ( iNumberOfReceiveBytes == iWantedNumberOfReceiveBytes){
+				iSerialNewData[iPort] = true;	//is needed for sending data to ROS
 			}else{
-				ROS_ERROR("Encoder data read error on port %i", iPort);
+				ROS_ERROR("Encoder data read on port %i", iPort);
 				if(iReceiveError == 0){
 					iFirstReceiveError = iEncoderDataReceiverCounter;
 				}
@@ -252,8 +257,10 @@ public:
 		}
 
 		if((iReceiveError != 0) && (iEncoderDataReceiverCounter % DEBUG_SPEED == 0)){
-				ROS_INFO("Total send errors = %i", iReceiveError);
-				ROS_INFO("first pass with error send = %i", iFirstReceiveError);
+				ROS_INFO("Total receive errors = %i", iReceiveError);
+				ROS_INFO("first pass with receive send = %i", iFirstReceiveError);
+				ROS_INFO("Number of wanted receive bytes = %i", iWantedNumberOfReceiveBytes); 
+				ROS_INFO("Number of receiv bytes = %i", iNumberOfReceiveBytes);
 		}
 		
 		/*
@@ -286,15 +293,18 @@ public:
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+			ROS_INFO("encoder data = %i", iEncoderData);
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
+			ROS_INFO("encoder data = %i", iEncoderData);
 			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
+			ROS_INFO("encoder data = %i", iEncoderData);
 			msg.data.push_back(0);
 
 			//send message
@@ -398,8 +408,8 @@ int main(int argc, char **argv  )
 				newkey.c_iflag = IGNPAR;
 				newkey.c_oflag = 0;
 				newkey.c_lflag = 0;       //ICANON;
-				newkey.c_cc[VMIN]=8;
-				newkey.c_cc[VTIME]=4;
+				newkey.c_cc[VMIN]=0;
+				newkey.c_cc[VTIME]=0;
 				tcflush(Sobject.iSerialPortId[iPort], TCIFLUSH);
 				tcsetattr(Sobject.iSerialPortId[iPort],TCSANOW,&newkey);
 				ROS_INFO("Setting options completed for port %i", iPort);
@@ -438,16 +448,23 @@ int main(int argc, char **argv  )
 	ROS_INFO("Serial ports are initialized");
 	ROS_INFO("Starting Transmission");
 
+	ros::Rate loop_rate(1000);
+	int iWhileCounter = 0;
+
 	while(ros::ok() )
-	{
-		//check if read data is on
-		if(READ_RS422_ON){
-			Sobject.readSerialPort();
+	{	
+		iWhileCounter++;
+		//run this file every 10 ms
+		if(iWhileCounter % 10 == 0){
+			//check if read data is on
+			if(READ_RS422_ON){
+				Sobject.readSerialPort();
+			}
 		}
 
 		//wait until a Float32MulitArray is received and run the callback function
 		ros::spinOnce();
-//		ros::spin();
+		loop_rate.sleep();
 	}
 		// here the port will be closed and the keyboard will be given back to the system.
 		close(Sobject.iSerialPortId[SERIAL_PORT_5]);
@@ -495,7 +512,7 @@ int set_interface_attribs (int fd, int speed, int parity)
 	// no canonical processing
 	tty.c_oflag = 0; // no remapping, no delays
 	tty.c_cc[VMIN] = 0; // read doesn't block
-	tty.c_cc[VTIME] = 5; // 0.5 seconds read timeout
+	tty.c_cc[VTIME] = 4; // 0.5 seconds read timeout
 	tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
 	tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
 	// enable reading

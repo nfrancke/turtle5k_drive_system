@@ -7,26 +7,26 @@
     </node>
 
  <!-- Axes -->
-  <param name="iAxisX" value="4" type="int"/>
-  <param name="iAxisY" value="3" type="int"/>
-  <param name="iAxisZ" value="6" type="int"/>
-  <param name="dScaleAxisX" value="2" type="double"/>
-  <param name="dScaleAxisY" value="2" type="double"/>
-  <param name="dScaleAxisZ" value="2" type="double"/>
+  <param name="iAxisX" value="1" type="int"/>
+  <param name="iAxisY" value="0" type="int"/>
+  <param name="iAxisZ" value="3" type="int"/>
+  <param name="dScaleAxisX" value="0.4" type="double"/>
+  <param name="dScaleAxisY" value="0.4" type="double"/>
+  <param name="dScaleAxisZ" value="0.4" type="double"/>
 
   <!-- Set drivers node -->
-	<node pkg="JoystickTurtle5k" type="MotorDriversSetNodeTwist" name="MotorDriverTwist"/>
+	<node pkg="turtle5k_drive_system" type="joystick_to_twist_node" name="joystick_to_twist_node" required = "true" output = "screen"/>
 
  <!-- Motor node params -->
 	<param name= "iConvertFactor" value = "1" />
-	<param name= "iMaxPulseSpeed" value = "150" />
-	<param name= "iMinPulseSpeed" value = "-150" />
+	<param name= "iMaxPulseSpeed" value = "700" />
+	<param name= "iMinPulseSpeed" value = "-700" />
 
  <!-- set Motor node -->
- <!	-- <node pkg =	"motordrive" type = "uart" name	="uart" required = "true" output = "screen"/> -->
+ 	<node pkg =	"turtle5k_drive_system" type = "motor_driver_node" name	="motor_driver_node" required = "true" output = "screen"/>
 
  <!-- set velocity node -->
-	<node pkg =	"calculate_velocity" type = "calculate_velocity_node" name ="calculate_velocity_node" required = "true" output = "screen"/>
+	<node pkg =	"turtle5k_drive_system" type = "calculate_velocity_node" name ="calculate_velocity_node" required = "true" output = "screen"/>
 
 </launch>
 <!-- %EndTag(FULL)%-->
