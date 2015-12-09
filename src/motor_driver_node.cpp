@@ -42,7 +42,15 @@ date 		: 13-11-2015
 #define SERIAL_PORT_7				6
 #define SERIAL_PORT_8				7
 
+#define OPEN_WITH_NONBLOCK 			0
+#define READ_RS422_ON				0
+
+#define DEBUG_SPEED					100
+
 using namespace std;
+
+struct termios oldtio, newtio;       //place for old and new port settings for serial port
+struct termios oldkey, newkey;       //place tor old and new port settings for keyboard teletype
 
 
 int set_interface_attribs (int fd, int speed, int parity);
@@ -71,13 +79,20 @@ public:
 		sub = nh.subscribe(TOPIC_NAME,TOPIC_BUFFER_SIZE, &Subscribe::commandRpmReceived, this);
 
 		pub = nh.advertise<std_msgs::Float32MultiArray>(PUB_TOPIC_NAME, PUB_TOPIC_BUFFER_SIZE);
+
+		iCommandReceivedCounter = 0;	//set counter to zero at the start of a project
+		iEncoderDataReceiverCounter = 0;
+		iSendError = 0;
+		iFirstSendError = 0;
+		iReceiveError = 0;
+		iFirstReceiveError = 0;
 		
 		//Reading param. This param will be used to convert the data from RPM to pulses.
 		std::string sParamName = "iConvertFactor";
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iConvertFactor);
-			ROS_INFO("parameter iConvertFacotr is readed and has value :%i", iConvertFactor);
+			ROS_INFO("parameter iConvertFactor is readed and has value :%i", iConvertFactor);
 		}else{
 			ROS_ERROR("Parameter iConvertFactor does not exist");
 			iConvertFactor = 0;
@@ -113,12 +128,19 @@ public:
 	/////////////////////////////////////////////////////////////////////////////
 	void commandRpmReceived(const std_msgs::Float32MultiArray::ConstPtr& msg)
 	{
-		ROS_INFO_ONCE("first time a FLoat32MultiArray is received");
-		ROS_DEBUG("Float32MultiArray received");
+		iCommandReceivedCounter++;
 
-		//prints the data from FLoat32MultiArray to log
-		for(int i = 0; i < 10 ; i++){
-			ROS_DEBUG("data poort %i = %f" , i, msg->data[i]);
+		ROS_INFO_ONCE("first time a FLoat32MultiArray is received");
+
+		//print
+		if(iCommandReceivedCounter % DEBUG_SPEED == 0){
+
+			ROS_DEBUG("%i times Float32MultiArray received", iCommandReceivedCounter);
+
+			//prints the data from FLoat32MultiArray to log
+			for(int i = 0; i < 10 ; i++){
+				ROS_DEBUG("data poort %i = %f" , i, msg->data[i]);
+			}
 		}
 
 		//writes the data from Float32MultiArray to iSpeed for serialport.
@@ -128,11 +150,11 @@ public:
 			//overload protection
 			if(serialPorts[i].iSpeed >= iMaxPulseSpeed){
 				serialPorts[i].iSpeed = iMaxPulseSpeed;
-				ROS_DEBUG("Speed is above maximum speed");
+				if(iCommandReceivedCounter % DEBUG_SPEED == 0) ROS_DEBUG("Speed is above maximum speed");
 			}
 			if(serialPorts[i].iSpeed <= iMinPulseSpeed){
 				serialPorts[i].iSpeed = iMinPulseSpeed;
-				ROS_DEBUG("Speed is below minimum speed");
+				if(iCommandReceivedCounter % DEBUG_SPEED == 0) ROS_DEBUG("Speed is below minimum speed");
 			}
 		}	
 		
@@ -149,60 +171,113 @@ public:
 		}
 
 		//print speed data that will be send to motordrivers.
-		for(int i = 0 ; i < 10 ; i++){
-			//int iVelocity = (serialPorts[i].cOutBuf[4] << 8) + serialPorts[i].cOutBuf[3];
-			ROS_DEBUG("data poort %i byte 3 = %i" , i,serialPorts[i].iSpeed);
-			ROS_DEBUG("data poort %i byte 3 = %X" , i,serialPorts[i].cOutBuf[3]);
-			ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);	
+		if(iCommandReceivedCounter % DEBUG_SPEED == 0){
+			for(int i = 0 ; i < 10 ; i++){
+				//int iVelocity = (serialPorts[i].cOutBuf[4] << 8) + serialPorts[i].cOutBuf[3];
+				ROS_DEBUG("data poort %i byte 3 = %i" , i,serialPorts[i].iSpeed);
+				ROS_DEBUG("data poort %i byte 3 = %X" , i,serialPorts[i].cOutBuf[3]);
+				ROS_DEBUG("data poort %i byte 4 = %X" , i,serialPorts[i].cOutBuf[4]);
+			}	
 		}
 
+		int iNumberOfSendBytes, iWantedNumberOfSendBytes;
+		//send data
+		for(int i = 0; i < 3; i++){
+			int iPort;
+
+			//change values for serial ports
+			switch(i){
+				case 0: iPort = SERIAL_PORT_5; break;
+				case 1: iPort = SERIAL_PORT_7; break;
+				case 2: iPort = SERIAL_PORT_8; break;
+			}
+
+			iNumberOfSendBytes = write(iSerialPortId[iPort], serialPorts[iPort].cOutBuf,sizeof serialPorts[iPort].cOutBuf);
+			iWantedNumberOfSendBytes = sizeof serialPorts[iPort].cOutBuf;
+
+			//Write data.
+			if(iWantedNumberOfSendBytes != iNumberOfSendBytes){
+				ROS_ERROR("port %i gives a send error", iPort);
+				if(iSendError == 0){
+					iFirstSendError = iCommandReceivedCounter;
+				}
+				iSendError++;
+			}
+		}
+
+		if((iSendError != 0) && (iCommandReceivedCounter % DEBUG_SPEED == 0)){
+				ROS_INFO("Total send errors = %i", iSendError);
+				ROS_INFO("first pass with error send = %i", iFirstSendError);
+				ROS_INFO("Number of wanted send bytes = %i", iWantedNumberOfSendBytes); 
+				ROS_INFO("Number of send bytes = %i", iNumberOfSendBytes);
+		}
+
+
 		//Write data.
-		write(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cOutBuf,sizeof serialPorts[SERIAL_PORT_5].cOutBuf);
-		write(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cOutBuf,sizeof serialPorts[SERIAL_PORT_7].cOutBuf);
-		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
+//		write(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cOutBuf,sizeof serialPorts[SERIAL_PORT_5].cOutBuf);
+//		write(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cOutBuf,sizeof serialPorts[SERIAL_PORT_7].cOutBuf);
+//		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
 	}
 
 	bool readSerialPort(){
+
+		iEncoderDataReceiverCounter++;
+
+				//print
+		if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_DEBUG("%i times encoder data received", iEncoderDataReceiverCounter);
+
 		//create multiarray
 		std_msgs::Float32MultiArray msg;
 		
-		/*
 		//read data
 		for(int x = 0; x < 3; x++){
-			int i = 20; // value that has no port.
+			int iPort = 20; // value that has no port.
 			
 			//change values for serial ports
 			switch(x){
-				case 0: i = SERIAL_PORT_5; break;
-				case 1: i = SERIAL_PORT_7; break;
-				case 2: i = SERIAL_PORT_8; break;
+				case 0: iPort = SERIAL_PORT_5; break;
+				case 1: iPort = SERIAL_PORT_7; break;
+				case 2: iPort = SERIAL_PORT_8; break;
 			}
-			ROS_INFO("%i", i);
 
-			if ((read(iSerialPortId[i], serialPorts[i].cInBuf, sizeof serialPorts[i].cInBuf))>0){
-				iSerialNewData[i] = true;
+		if (sizeof serialPorts[iPort] == (read(iSerialPortId[iPort], serialPorts[iPort].cInBuf,sizeof serialPorts[iPort].cInBuf))){
+				iSerialNewData[iPort] = true;
+			}else{
+				ROS_ERROR("Encoder data read error on port %i", iPort);
+				if(iReceiveError == 0){
+					iFirstReceiveError = iEncoderDataReceiverCounter;
+				}
+				iReceiveError++;
 			}
 		}
-		*/
+
+		if((iReceiveError != 0) && (iEncoderDataReceiverCounter % DEBUG_SPEED == 0)){
+				ROS_INFO("Total send errors = %i", iReceiveError);
+				ROS_INFO("first pass with error send = %i", iFirstReceiveError);
+		}
 		
-		if ((read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))>0){
+		/*
+		if (sizeof serialPorts[SERIAL_PORT_5] == (read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))){
 			iSerial5NewData = true;
 		}
-		if ((read(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cInBuf,sizeof serialPorts[SERIAL_PORT_7].cInBuf))>0){
+		if (sizeof serialPorts[SERIAL_PORT_7] == (read(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cInBuf,sizeof serialPorts[SERIAL_PORT_7].cInBuf))){
 			iSerial7NewData = true;
 		}
-		if ((read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))>0){
+		if (sizeof serialPorts[SERIAL_PORT_8] == (read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))){
 			iSerial8NewData = true;
 		} 
+		*/
 		
 
-//		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){
-		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){			
+		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){
+//		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){			
 			int iEncoderData;
 
-			ROS_INFO("data encoder wiel 5:0x%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
-			ROS_INFO("data encoder wiel 7:0x%x%x", serialPorts[SERIAL_PORT_7].cInBuf[4],serialPorts[SERIAL_PORT_7].cInBuf[3]);
-			ROS_INFO("data encoder wiel 8:0x%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
+			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0){
+				ROS_DEBUG("data encoder port 5:0x%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
+				ROS_DEBUG("data encoder port 7:0x%x%x", serialPorts[SERIAL_PORT_7].cInBuf[4],serialPorts[SERIAL_PORT_7].cInBuf[3]);
+				ROS_DEBUG("data encoder port 8:0x%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
+			}
 
 			//put speedvalues into array
 			msg.data.clear();
@@ -211,32 +286,34 @@ public:
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
-			ROS_INFO("data encoder wiel 5:%i", iEncoderData);
+			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
-			ROS_INFO("data encoder wiel 7:%i", iEncoderData);
+			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
-			ROS_INFO("data encoder wiel 8:%i", iEncoderData);
+			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 
 			//send message
 			pub.publish(msg);
 
-			/*
+			
 			//clear markers
 			for(int i = 0; i < 10 ; i++){
 				iSerialNewData[i] = false;
 			}
-			*/
-
+			
+			/*
 			iSerial5NewData = 0;
 			iSerial7NewData = 0;
 			iSerial8NewData = 0;
-			
-			ROS_DEBUG("encoder data send");
+			*/
+
+			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_DEBUG("encoder data send");
+
 			return 1;
 		}else{
 			return 0;
@@ -250,6 +327,12 @@ private:
 	bool iSerial5NewData;
 	bool iSerial7NewData;
 	bool iSerial8NewData;
+	int iCommandReceivedCounter; //counter for command received function
+	int iEncoderDataReceiverCounter; //counter for command received function
+	int iSendError;
+	int iFirstSendError;
+	int iReceiveError;
+	int iFirstReceiveError;
 };
 /*****************************************************************************************************************************************
 end of defining class Subscribe
@@ -270,19 +353,60 @@ int main(int argc, char **argv  )
 	Subscribe Sobject(nh);
 	
 	ROS_INFO("Serial Ports will be initialized");
-	ROS_DEBUG("O_NONBLOCK = %i", O_NONBLOCK);
+	//ROS_DEBUG("O_NONBLOCK = %i", O_NONBLOCK);
 
 	//open the serial ports and put the id number in a variable
 	//O_RWDR = open for reading and writing
 	//O_NOCTTY = the port never becomes the controlling terminal of the process
 	//O_NDELAY = use non-blocking i/o. on some system this is also means the rs232 dcd signal line is ignored.	
-	Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
-	ROS_INFO("Serial port 5 are connected to hardware");
-	Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
-	ROS_INFO("Serial port 7 are connected to hardware");
-	Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
-	ROS_INFO("Serial port 8 are connected to hardware");
 
+	if(OPEN_WITH_NONBLOCK){
+		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 5 are connected to hardware");
+		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 7 are connected to hardware");
+		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 8 are connected to hardware");
+	}else{
+		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 5 are connected to hardware");
+		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 7 are connected to hardware");
+		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		ROS_INFO("Serial port 8 are connected to hardware");
+	}
+
+	for(int i = 0; i < 3; i++){
+		int iPort;
+
+		//change values for serial ports
+		switch(i){
+			case 0: iPort = SERIAL_PORT_5; break;
+			case 1: iPort = SERIAL_PORT_7; break;
+			case 2: iPort = SERIAL_PORT_8; break;
+		}
+
+		if(Sobject.iSerialPortId[iPort] <= 0){
+			ROS_ERROR("Error opening port %i", iPort);
+		}else{
+				ROS_INFO("port %i is open", iPort);
+			#if 1
+				ROS_INFO("Setting options port %i", iPort);
+				tcgetattr(Sobject.iSerialPortId[iPort],&oldkey); // save current port settings   //so commands are interpreted right for this program
+				// set new port settings for non-canonical input processing  //must be NOCTTY
+				newkey.c_cflag = B115200 | CS8 | CLOCAL | CREAD;
+				newkey.c_iflag = IGNPAR;
+				newkey.c_oflag = 0;
+				newkey.c_lflag = 0;       //ICANON;
+				newkey.c_cc[VMIN]=8;
+				newkey.c_cc[VTIME]=4;
+				tcflush(Sobject.iSerialPortId[iPort], TCIFLUSH);
+				tcsetattr(Sobject.iSerialPortId[iPort],TCSANOW,&newkey);
+				ROS_INFO("Setting options completed for port %i", iPort);
+			#endif
+		}
+	}
+/*
 	//control of all ports are opened correctly
 	if(Sobject.iSerialPortId[SERIAL_PORT_5] > 0){
 		ROS_INFO("serial port 5 is number %i",Sobject.iSerialPortId[SERIAL_PORT_5]);
@@ -310,17 +434,26 @@ int main(int argc, char **argv  )
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_5], 0); // set no blocking
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
 	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 0); // set no blocking
-
+*/
 	ROS_INFO("Serial ports are initialized");
+	ROS_INFO("Starting Transmission");
 
-	while(ros::ok())
+	while(ros::ok() )
 	{
-		Sobject.readSerialPort();
+		//check if read data is on
+		if(READ_RS422_ON){
+			Sobject.readSerialPort();
+		}
 
 		//wait until a Float32MulitArray is received and run the callback function
 		ros::spinOnce();
 //		ros::spin();
 	}
+		// here the port will be closed and the keyboard will be given back to the system.
+		close(Sobject.iSerialPortId[SERIAL_PORT_5]);
+		close(Sobject.iSerialPortId[SERIAL_PORT_7]);
+		close(Sobject.iSerialPortId[SERIAL_PORT_8]);
+		ROS_INFO("ports are closed\n");
 
 	return 0;
 }
