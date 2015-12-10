@@ -42,6 +42,7 @@ date 		: 18-11-2015
 #define RADIUS_OMNI_WHEEL						0.1016/2 //meter
 #define RADIUS_DRIVING_SYSTEM					0.22 //meter
 #define MOTOR_TO_WHEEL_TRANSMISSION_RATIO 		12
+#define DEBUG_SPEED								100
 
 using namespace std;
 
@@ -62,6 +63,8 @@ public:
 		sub = nh.subscribe(SUBSCRIBE_TOPIC_NAME,SUBSCRIBE_TOPIC_BUFFER_SIZE, &PublishAndSubscribe::twistMessageReceived, this);
 		pub = nh.advertise<std_msgs::Float32MultiArray>(PUBLISH_TOPIC_NAME,PUBLISH_TOPIC_BUFFER_SIZE);
 
+		iTwistMessageReceivedCounter = 0;
+
 		ROS_INFO("calculate_velocity_node is initialized");
 	}
 	
@@ -72,6 +75,8 @@ public:
 	/////////////////////////////////////////////////////////////////////////////
 	void twistMessageReceived(const geometry_msgs::Twist::ConstPtr& msg)
 	{
+		iTwistMessageReceivedCounter ++;
+
 		ROS_INFO_ONCE("Received a twist message for the first time.");
 
 		//linear values out of twist messages.
@@ -79,26 +84,26 @@ public:
 		float fY = msg->linear.y;
 		float fOmega = msg->angular.z;
 
-		//Debug messages.
-		ROS_DEBUG("x = %f", fX);
-		ROS_DEBUG("y = %f", fY);
-		ROS_DEBUG("omega = %f", fOmega);
-
 		//convert degree values in to radian value's
 		float fAngle1 = ((float)ANGLE_1/180)*M_PI;
 		float fAngle2 = ((float)ANGLE_2/180)*M_PI;
 		float fAngle3 = ((float)ANGLE_3/180)*M_PI;
 		float fTheta  = ((float)THETA/180)*M_PI;
 
-		//Debug messages
-		ROS_DEBUG("angle1 is %f  pi radians and %i degrees" ,(fAngle1/M_PI), ANGLE_1);
-		ROS_DEBUG("angle2 is %f pi radians and %i degrees" , (fAngle2/M_PI), ANGLE_2);
-		ROS_DEBUG("angle3 is %f pi radians and %i degrees" , (fAngle3/M_PI), ANGLE_3);
-		ROS_DEBUG("theta is %f pi radians and %i degrees" , (fTheta/M_PI), THETA);
 		float fRadiusOmniwheel = RADIUS_OMNI_WHEEL;	//this is needed, because the define won't work in a formule. (i don't know why)
-		ROS_DEBUG("radius omni wheel: %f", fRadiusOmniwheel);
 		float fMotorToWheelTransmissionRatio = MOTOR_TO_WHEEL_TRANSMISSION_RATIO;	
-		ROS_DEBUG("radius omni wheel: %f", fMotorToWheelTransmissionRatio);
+
+		if(iTwistMessageReceivedCounter % DEBUG_SPEED == 0 ){
+			ROS_DEBUG("x = %f", fX);
+			ROS_DEBUG("y = %f", fY);
+			ROS_DEBUG("omega = %f", fOmega);
+			ROS_DEBUG("angle1 is %f  pi radians and %i degrees" ,(fAngle1/M_PI), ANGLE_1);
+			ROS_DEBUG("angle2 is %f pi radians and %i degrees" , (fAngle2/M_PI), ANGLE_2);
+			ROS_DEBUG("angle3 is %f pi radians and %i degrees" , (fAngle3/M_PI), ANGLE_3);
+			ROS_DEBUG("theta is %f pi radians and %i degrees" , (fTheta/M_PI), THETA);
+			ROS_DEBUG("radius omni wheel: %f", fRadiusOmniwheel);
+			ROS_DEBUG("radius omni wheel: %f", fMotorToWheelTransmissionRatio);
+		}
 
 		float fSpeedWheel[10];
 
@@ -110,10 +115,12 @@ public:
 		fSpeedWheel[8] = (-sin(fTheta + fAngle2)*fY + (cos(fTheta + fAngle2))*fX + RADIUS_DRIVING_SYSTEM*(-fOmega))/fRadiusOmniwheel;
 		fSpeedWheel[5] = (-sin(fTheta + fAngle3)*fY + (cos(fTheta + fAngle3))*fX + RADIUS_DRIVING_SYSTEM*(-fOmega))/fRadiusOmniwheel;
 
-		//Debug messages
-		ROS_DEBUG("speed wheel 1 rad/s = %f", fSpeedWheel[7]);
-		ROS_DEBUG("speed wheel 2 rad/s = %f", fSpeedWheel[5]);
-		ROS_DEBUG("speed wheel 3 rad/s = %f", fSpeedWheel[8]);
+		if(iTwistMessageReceivedCounter % DEBUG_SPEED == 0 ){
+			//Debug messages
+			ROS_DEBUG("speed wheel 1 rad/s = %f", fSpeedWheel[7]);
+			ROS_DEBUG("speed wheel 2 rad/s = %f", fSpeedWheel[5]);
+			ROS_DEBUG("speed wheel 3 rad/s = %f", fSpeedWheel[8]);
+		}
 
 		//convert rad/s to radian and convert motor rpm to wheel RPM
 		//RPM = rad * 60/2pi
@@ -122,10 +129,12 @@ public:
 			fSpeedWheel[i] = fSpeedWheel[i] * fMotorToWheelTransmissionRatio;
 		}
 
-		//Debug messages
-		ROS_DEBUG("speed wheel 1 RPM = %f", fSpeedWheel[7]);
-		ROS_DEBUG("speed wheel 2 RPM = %f", fSpeedWheel[5]);
-		ROS_DEBUG("speed wheel 3 RPM = %f", fSpeedWheel[8]);
+		if(iTwistMessageReceivedCounter % DEBUG_SPEED == 0 ){
+			//Debug messages
+			ROS_DEBUG("speed wheel 1 RPM = %f", fSpeedWheel[7]);
+			ROS_DEBUG("speed wheel 2 RPM = %f", fSpeedWheel[5]);
+			ROS_DEBUG("speed wheel 3 RPM = %f", fSpeedWheel[8]);
+		}
 
 		//Define output message (Float32MultiArray)
 		std_msgs::Float32MultiArray msg_out;
@@ -152,6 +161,7 @@ public:
 private:
 	ros::Subscriber sub;	//define ros subscriber
 	ros::Publisher pub;
+	int iTwistMessageReceivedCounter;
 };
 /*****************************************************************************************************************************************
 end of defining class Subscribe
