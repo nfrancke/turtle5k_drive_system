@@ -64,7 +64,7 @@ public:
 	int iConvertFactor;
 	int iMaxPulseSpeed; 		//maximum RPM value
 	int iMinPulseSpeed;			//Minimum RPM value
-	int iSerialPortId[10];		//variable that catches the number of serial ports.			
+	int iSerialPortId[10];		//variable that catches the number of serial ports.	
 	
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
@@ -116,6 +116,28 @@ public:
 			ROS_ERROR("Parameter iMinPulseSpeed does not exist");
 			iMinPulseSpeed = 0;
 		}
+
+		//Reading param. This param will be used to convert the data from RPM to pulses.
+		sParamName = "iOmniWheelMotorDriversPfactor";
+		//check if param is defined.
+		if (nh.hasParam(sParamName)){
+			nh.getParam(sParamName, iKp);
+			ROS_INFO("parameter iOmniWheelMotorDriversPfactor is readed and has value :%i", iKp);
+		}else{
+			ROS_ERROR("Parameter iOmniWheelMotorDriversPfactor does not exist. Default value is taken");
+			iKp = 10;
+		}
+
+				//Reading param. This param will be used to convert the data from RPM to pulses.
+		sParamName = "iOmniWheelMotorDriversIfactor";
+		//check if param is defined.
+		if (nh.hasParam(sParamName)){
+			nh.getParam(sParamName, iKi);
+			ROS_INFO("parameter iOmniWheelMotorDriversIfactor is readed and has value :%i", iKi);
+		}else{
+			ROS_ERROR("Parameter iOmniWheelMotorDriversIfactor does not exist. Default value is taken");
+			iKi = 0;
+		}
 	}
 	
 	/////////////////////////////////////////////////////////////////////////////
@@ -162,8 +184,8 @@ public:
 			serialPorts[i].cOutBuf[2] = MOTORDRIVER_CMD; 
 			serialPorts[i].cOutBuf[3] = (serialPorts[i].iSpeed & 0xff);
 			serialPorts[i].cOutBuf[4] = (serialPorts[i].iSpeed >> 8) & 0xff;
-			serialPorts[i].cOutBuf[5] = 0x00; //data 2 (not defined)
-			serialPorts[i].cOutBuf[6] = 0x00; //data 2 (not defined)
+			serialPorts[i].cOutBuf[5] = iKi; //data 2 (not defined)
+			serialPorts[i].cOutBuf[6] = iKp;  //0x00; //data 2 (not defined)
 			serialPorts[i].cOutBuf[7] = MOTORDRIVER_END_OF_FRAME;
 		}
 
@@ -268,30 +290,53 @@ public:
 				ROS_DEBUG("data encoder port 8:0x%x%x", serialPorts[SERIAL_PORT_8].cInBuf[4],serialPorts[SERIAL_PORT_8].cInBuf[3]);
 			}
 
-			//put speedvalues into array
-			msg.data.clear();
-			msg.data.push_back(0);
-			msg.data.push_back(0);
-			msg.data.push_back(0);
-			msg.data.push_back(0);
-			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
-			//ROS_INFO("encoder data = %i", iEncoderData);
-			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
-			msg.data.push_back(iEncoderData);
-			msg.data.push_back(0);
-			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
-			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
-			msg.data.push_back(iEncoderData);
-			//ROS_INFO("encoder data = %i", iEncoderData);
-			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
-			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
-			msg.data.push_back(iEncoderData);
-			//ROS_INFO("encoder data = %i", iEncoderData);
-			msg.data.push_back(0);
 
-			//send message
-			pub.publish(msg);
 
+			bool bReadEnable[10];
+
+			//check if received data is valid.
+			for(int x = 0; x < 3; x++){
+				int iPort = 20; // value that has no port.
+				
+				//change values for serial ports
+				switch(x){
+					case 0: iPort = SERIAL_PORT_5; break;
+					case 1: iPort = SERIAL_PORT_7; break;
+					case 2: iPort = SERIAL_PORT_8; break;
+				}
+
+				bReadEnable[iPort] = 	(serialPorts[iPort].cInBuf[0] == MOTORDRIVER_START_OF_FRAME) 
+										&& (serialPorts[iPort].cInBuf[1] == MOTORDRIVER_TYPE_RECEIVE) 
+										&& (serialPorts[iPort].cInBuf[2] == MOTORDRIVER_CMD_RECEIVE);
+			}	
+
+			//varify data and send it
+			if( bReadEnable[SERIAL_PORT_5] && bReadEnable[SERIAL_PORT_7] && bReadEnable[SERIAL_PORT_8]){
+
+				//put speedvalues into array
+				msg.data.clear();
+				msg.data.push_back(0);
+				msg.data.push_back(0);
+				msg.data.push_back(0);
+				msg.data.push_back(0);
+				iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
+				//ROS_INFO("encoder data = %i", iEncoderData);
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+				msg.data.push_back(0);
+				iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+				//ROS_INFO("encoder data = %i", iEncoderData);
+				iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+				//ROS_INFO("encoder data = %i", iEncoderData);
+				msg.data.push_back(0);
+
+				//send message
+				pub.publish(msg);
+			}
 			
 			//clear markers
 			for(int i = 0; i < 10 ; i++){
@@ -318,6 +363,9 @@ private:
 	int iFirstSendError;
 	int iReceiveError;
 	int iFirstReceiveError;
+
+	int iKp;			//kp for motor drivers		
+	int iKi;			//ki for motor drivers
 };
 /*****************************************************************************************************************************************
 end of defining class Subscribe
