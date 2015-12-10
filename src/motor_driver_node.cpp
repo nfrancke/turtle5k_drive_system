@@ -27,6 +27,7 @@ date 		: 13-11-2015
 #include <errno.h>
 
 //-----settings
+#define ROS_LOOP_RATE_HZ			1000
 #define MOTORDRIVER_START_OF_FRAME 	0x5a
 #define MOTORDRIVER_TYPE 			0xaa
 #define MOTORDRIVER_TYPE_RECEIVE	0x55
@@ -38,12 +39,12 @@ date 		: 13-11-2015
 #define PUB_TOPIC_NAME				"motorspeed_feedback"
 #define PUB_TOPIC_BUFFER_SIZE		1
 
+#define OPEN_WITH_NONBLOCK 			1		
+#define READ_RS422_ON				1
+#define READ_RS422_INTERVAL_HZ		100		
 #define SERIAL_PORT_5				4
 #define SERIAL_PORT_7				6
 #define SERIAL_PORT_8				7
-
-#define OPEN_WITH_NONBLOCK 			0
-#define READ_RS422_ON				1
 
 #define DEBUG_SPEED					100
 
@@ -51,10 +52,6 @@ using namespace std;
 
 struct termios oldtio, newtio;       //place for old and new port settings for serial port
 struct termios oldkey, newkey;       //place tor old and new port settings for keyboard teletype
-
-
-int set_interface_attribs (int fd, int speed, int parity);
-void set_blocking (int fd, int should_block);
 
 /*****************************************************************************************************************************************
 Start defining class Subscribe
@@ -64,10 +61,10 @@ class Subscribe
 public:
 	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[8];};	//data for serialports
 	Output serialPorts[10];							
-	int iConvertFactor;								//this factor will convert data from RPM to pulses/time value
-	int iMaxPulseSpeed; 
-	int iMinPulseSpeed;
-	int iSerialPortId[10];							
+	int iConvertFactor;
+	int iMaxPulseSpeed; 		//maximum RPM value
+	int iMinPulseSpeed;			//Minimum RPM value
+	int iSerialPortId[10];		//variable that catches the number of serial ports.			
 	
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
@@ -197,7 +194,7 @@ public:
 
 			//Write data.
 			if(iWantedNumberOfSendBytes != iNumberOfSendBytes){
-				ROS_ERROR("port %i gives a send error", iPort);
+				ROS_ERROR("port %i gives a send error", (iPort+1));
 				if(iSendError == 0){
 					iFirstSendError = iCommandReceivedCounter;
 				}
@@ -211,14 +208,13 @@ public:
 				ROS_INFO("Number of wanted send bytes = %i", iWantedNumberOfSendBytes); 
 				ROS_INFO("Number of send bytes = %i", iNumberOfSendBytes);
 		}
-
-
-		//Write data.
-//		write(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cOutBuf,sizeof serialPorts[SERIAL_PORT_5].cOutBuf);
-//		write(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cOutBuf,sizeof serialPorts[SERIAL_PORT_7].cOutBuf);
-//		write(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cOutBuf,sizeof serialPorts[SERIAL_PORT_8].cOutBuf);
 	}
 
+	/////////////////////////////////////////////////////////////////////////////
+	//function: This function will read the RS422 ports and send the data to ROS
+	//pre: 
+	//post: values for array places 4,6,7, because the serial ports are 5,7 and 8
+	/////////////////////////////////////////////////////////////////////////////
 	bool readSerialPort(){
 
 		iEncoderDataReceiverCounter++;
@@ -248,7 +244,7 @@ public:
 		if ( iNumberOfReceiveBytes == iWantedNumberOfReceiveBytes){
 				iSerialNewData[iPort] = true;	//is needed for sending data to ROS
 			}else{
-				ROS_ERROR("Encoder data read on port %i", iPort);
+				ROS_ERROR("Encoder data read on port %i", (iPort + 1));
 				if(iReceiveError == 0){
 					iFirstReceiveError = iEncoderDataReceiverCounter;
 				}
@@ -262,22 +258,8 @@ public:
 				ROS_INFO("Number of wanted receive bytes = %i", iWantedNumberOfReceiveBytes); 
 				ROS_INFO("Number of receiv bytes = %i", iNumberOfReceiveBytes);
 		}
-		
-		/*
-		if (sizeof serialPorts[SERIAL_PORT_5] == (read(iSerialPortId[SERIAL_PORT_5], serialPorts[SERIAL_PORT_5].cInBuf,sizeof serialPorts[SERIAL_PORT_5].cInBuf))){
-			iSerial5NewData = true;
-		}
-		if (sizeof serialPorts[SERIAL_PORT_7] == (read(iSerialPortId[SERIAL_PORT_7], serialPorts[SERIAL_PORT_7].cInBuf,sizeof serialPorts[SERIAL_PORT_7].cInBuf))){
-			iSerial7NewData = true;
-		}
-		if (sizeof serialPorts[SERIAL_PORT_8] == (read(iSerialPortId[SERIAL_PORT_8], serialPorts[SERIAL_PORT_8].cInBuf,sizeof serialPorts[SERIAL_PORT_8].cInBuf))){
-			iSerial8NewData = true;
-		} 
-		*/
-		
 
-		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){
-//		if(iSerial5NewData && iSerial7NewData && iSerial8NewData){			
+		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){		
 			int iEncoderData;
 
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0){
@@ -293,18 +275,18 @@ public:
 			msg.data.push_back(0);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
-			ROS_INFO("encoder data = %i", iEncoderData);
+			//ROS_INFO("encoder data = %i", iEncoderData);
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
 			msg.data.push_back(0);
 			iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
-			ROS_INFO("encoder data = %i", iEncoderData);
+			//ROS_INFO("encoder data = %i", iEncoderData);
 			iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
 			msg.data.push_back(iEncoderData);
-			ROS_INFO("encoder data = %i", iEncoderData);
+			//ROS_INFO("encoder data = %i", iEncoderData);
 			msg.data.push_back(0);
 
 			//send message
@@ -316,12 +298,6 @@ public:
 				iSerialNewData[i] = false;
 			}
 			
-			/*
-			iSerial5NewData = 0;
-			iSerial7NewData = 0;
-			iSerial8NewData = 0;
-			*/
-
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_DEBUG("encoder data send");
 
 			return 1;
@@ -334,12 +310,11 @@ private:
 	ros::Subscriber sub;	//define ros subscriber
 	ros::Publisher	pub;	//define ros publisher
 	bool iSerialNewData[10];
-	bool iSerial5NewData;
-	bool iSerial7NewData;
-	bool iSerial8NewData;
-	int iCommandReceivedCounter; //counter for command received function
-	int iEncoderDataReceiverCounter; //counter for command received function
-	int iSendError;
+
+	//error detection
+	int iCommandReceivedCounter; 		//counter for command received function
+	int iEncoderDataReceiverCounter; 	//counter for command received function
+	int iSendError;					 	
 	int iFirstSendError;
 	int iReceiveError;
 	int iFirstReceiveError;
@@ -369,7 +344,6 @@ int main(int argc, char **argv  )
 	//O_RWDR = open for reading and writing
 	//O_NOCTTY = the port never becomes the controlling terminal of the process
 	//O_NDELAY = use non-blocking i/o. on some system this is also means the rs232 dcd signal line is ignored.	
-
 	if(OPEN_WITH_NONBLOCK){
 		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
 		ROS_INFO("Serial port 5 are connected to hardware");
@@ -399,7 +373,7 @@ int main(int argc, char **argv  )
 		if(Sobject.iSerialPortId[iPort] <= 0){
 			ROS_ERROR("Error opening port %i", iPort);
 		}else{
-				ROS_INFO("port %i is open", iPort);
+				ROS_INFO("port %i is open", (iPort + 1));
 			#if 1
 				ROS_INFO("Setting options port %i", iPort);
 				tcgetattr(Sobject.iSerialPortId[iPort],&oldkey); // save current port settings   //so commands are interpreted right for this program
@@ -412,50 +386,23 @@ int main(int argc, char **argv  )
 				newkey.c_cc[VTIME]=0;
 				tcflush(Sobject.iSerialPortId[iPort], TCIFLUSH);
 				tcsetattr(Sobject.iSerialPortId[iPort],TCSANOW,&newkey);
-				ROS_INFO("Setting options completed for port %i", iPort);
+				ROS_INFO("Setting options completed for port %i", (iPort +1));
 			#endif
 		}
 	}
-/*
-	//control of all ports are opened correctly
-	if(Sobject.iSerialPortId[SERIAL_PORT_5] > 0){
-		ROS_INFO("serial port 5 is number %i",Sobject.iSerialPortId[SERIAL_PORT_5]);
-	} else {
-		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS5", strerror (errno));
-		return -1;
-	}
-	if(Sobject.iSerialPortId[SERIAL_PORT_7] > 0){
-		ROS_INFO("serial port 7 is number %i",Sobject.iSerialPortId[SERIAL_PORT_7]);
-	}else {
-		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS7", strerror (errno));
-		return -1;
-	}
-	if(Sobject.iSerialPortId[SERIAL_PORT_8] > 0){
-		ROS_INFO("serial port 8 is number %i",Sobject.iSerialPortId[SERIAL_PORT_8]);
-	}else {
-		ROS_ERROR ("error %d opening %s: %s", errno, "/dev/ttyS8", strerror (errno));
-		return -1;
-	}
 
-	//set parameters for serial communication
-	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_5], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_7], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_interface_attribs (Sobject.iSerialPortId[SERIAL_PORT_8], B115200, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_5], 0); // set no blocking
-	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_7], 0); // set no blocking
-	set_blocking (Sobject.iSerialPortId[SERIAL_PORT_8], 0); // set no blocking
-*/
 	ROS_INFO("Serial ports are initialized");
 	ROS_INFO("Starting Transmission");
 
-	ros::Rate loop_rate(1000);
+	ros::Rate loop_rate(ROS_LOOP_RATE_HZ);
 	int iWhileCounter = 0;
 
 	while(ros::ok() )
 	{	
 		iWhileCounter++;
-		//run this file every 10 ms
-		if(iWhileCounter % 10 == 0){
+		//Choose with which rate the RS422 port will be read.
+
+		if((iWhileCounter > 300) && (iWhileCounter % (ROS_LOOP_RATE_HZ/READ_RS422_INTERVAL_HZ) == 0)){
 			//check if read data is on
 			if(READ_RS422_ON){
 				Sobject.readSerialPort();
@@ -477,81 +424,4 @@ int main(int argc, char **argv  )
 
 /*****************************************************************************************************************************************
 End of main
-********************************************************************************************************************************************/
-
-
-/*****************************************************************************************************************************************
-Functions
-********************************************************************************************************************************************/
-
-/////////////////////////////////////////////////////////////////////////////
-//function: this function set the parameters for the serial port.
-//pre: 
-//post: -
-/////////////////////////////////////////////////////////////////////////////
-int set_interface_attribs (int fd, int speed, int parity)
-{
-	struct termios tty;
-	memset (&tty, 0, sizeof tty);
-
-	if (tcgetattr (fd, &tty) != 0)
-	{
-		ROS_ERROR("error %d from tcgetattr", errno);
-		return -1;
-	}
-
-	cfsetospeed (&tty, speed);
-	cfsetispeed (&tty, speed);
-	tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8; // 8-bit chars
-	// disable IGNBRK for mismatched speed tests; otherwise receive break
-	// as \000 chars
-	tty.c_iflag &= ~IGNBRK; // disable break processing
-//	tty.c_lflag = 0; // no signaling chars, no echo,
-	// no canonical processing
-	tty.c_lflag &= ~ICANON; // no signaling chars, no echo,
-	// no canonical processing
-	tty.c_oflag = 0; // no remapping, no delays
-	tty.c_cc[VMIN] = 0; // read doesn't block
-	tty.c_cc[VTIME] = 4; // 0.5 seconds read timeout
-	tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
-	tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
-	// enable reading
-	tty.c_cflag &= ~(PARENB | PARODD); // shut off parity
-	tty.c_cflag |= parity;
-	//tty.c_cflag &= ~CSTOPB;
-	tty.c_cflag |= CSTOPB; //2 stop bits
-	tty.c_cflag &= ~CRTSCTS; //disable hardware flow control
-
-	if (tcsetattr (fd, TCSANOW, &tty) != 0)
-	{
-		ROS_ERROR ("error %d from tcsetattr", errno);
-		return 1;
-	}
-	return 0;
-}
-
-/////////////////////////////////////////////////////////////////////////////
-//function: this function sets the blocking of te serial port.
-//pre: 
-//post: -
-/////////////////////////////////////////////////////////////////////////////
-void set_blocking (int fd, int should_block)
-{
-	struct termios tty;
-	memset (&tty, 0, sizeof tty);
-	
-	if (tcgetattr (fd, &tty) != 0)
-	{
-		ROS_ERROR ("error %d from tggetattr", errno);
-	}
-
-	tty.c_cc[VMIN] = should_block ? 1 : 0;
-	tty.c_cc[VTIME] = 5; // 0.5 seconds read timeout
-
-	if (tcsetattr (fd, TCSANOW, &tty) != 0){
-		ROS_ERROR ("error %d setting term attributes", errno);
-	}
-}
-/*****************************************************************************************************************************************
-End of functions
 ********************************************************************************************************************************************/
