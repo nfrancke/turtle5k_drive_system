@@ -10,10 +10,11 @@ A "ros param" that descibes the factor between the incomming array (RPM) and the
 two "ros params" that describe the minimum and the maximum of the velocity that will be send to the motordrivers. NOTE: this is no RPM!!!
 
 Post:
-rs422 message on serial bus 5, 6 and 7 that gives the speed in pulses per time sample. The exact message can be found in the outputbuffer.
+rs422 message on serial bus 5, 6 and 7 that gives the speed RPM. The exact message can be found in the outputbuffer. The encoder data will be
+send on a Float32MultiArray. the data of port 5 is in array[4] etc.. The topic of this message = motorspeed_feedback.
 
 Writer 		: Niek Francke
-date 		: 13-11-2015
+date 		: 11-12-2015
 ********************************************************************************************************************************************/
 
 #include <iostream>
@@ -39,14 +40,19 @@ date 		: 13-11-2015
 #define PUB_TOPIC_NAME				"motorspeed_feedback"
 #define PUB_TOPIC_BUFFER_SIZE		1
 
-#define OPEN_WITH_NONBLOCK 			1		
-#define READ_RS422_ON				1
-#define READ_RS422_INTERVAL_HZ		100		
+#define OPEN_WITH_NONBLOCK 			1	
+#define READ_RS422_ON				1	//Read port on/off
+#define RS422_VMIN					0	//minimal number of characters for receiving data. only when OPEN_WITH_NONBLOCK = 1
+#define RS422_VTIME					0	//time to wait on a signal. only when OPEN_WITH_NONBLOCK = 1
+#define READ_RS422_INTERVAL_HZ		100	
+#define DEBUG_SPEED					100 //delay for debug messages. it has no time defenition
+
+#define MOTORDRIVER_KP_DEFAULT		100	//= kp * 100
+#define MOTORDRIVER_KI_DEFAULT		0	//= ki * 100
+
 #define SERIAL_PORT_5				4
 #define SERIAL_PORT_7				6
 #define SERIAL_PORT_8				7
-
-#define DEBUG_SPEED					100
 
 using namespace std;
 
@@ -125,7 +131,7 @@ public:
 			ROS_INFO("parameter iOmniWheelMotorDriversPfactor is readed and has value :%i", iKp);
 		}else{
 			ROS_ERROR("Parameter iOmniWheelMotorDriversPfactor does not exist. Default value is taken");
-			iKp = 10;
+			iKp = MOTORDRIVER_KP_DEFAULT;
 		}
 
 				//Reading param. This param will be used to convert the data from RPM to pulses.
@@ -136,7 +142,7 @@ public:
 			ROS_INFO("parameter iOmniWheelMotorDriversIfactor is readed and has value :%i", iKi);
 		}else{
 			ROS_ERROR("Parameter iOmniWheelMotorDriversIfactor does not exist. Default value is taken");
-			iKi = 0;
+			iKi = MOTORDRIVER_KI_DEFAULT;
 		}
 	}
 	
@@ -184,8 +190,8 @@ public:
 			serialPorts[i].cOutBuf[2] = MOTORDRIVER_CMD; 
 			serialPorts[i].cOutBuf[3] = (serialPorts[i].iSpeed & 0xff);
 			serialPorts[i].cOutBuf[4] = (serialPorts[i].iSpeed >> 8) & 0xff;
-			serialPorts[i].cOutBuf[5] = iKi; //data 2 (not defined)
-			serialPorts[i].cOutBuf[6] = iKp;  //0x00; //data 2 (not defined)
+			serialPorts[i].cOutBuf[5] = iKi;  //ki value motordrivers
+			serialPorts[i].cOutBuf[6] = iKp;  //kp value motordrivers
 			serialPorts[i].cOutBuf[7] = MOTORDRIVER_END_OF_FRAME;
 		}
 
@@ -274,6 +280,7 @@ public:
 			}
 		}
 
+
 		if((iReceiveError != 0) && (iEncoderDataReceiverCounter % DEBUG_SPEED == 0)){
 				ROS_INFO("Total receive errors = %i", iReceiveError);
 				ROS_INFO("first pass with receive send = %i", iFirstReceiveError);
@@ -305,6 +312,7 @@ public:
 					case 2: iPort = SERIAL_PORT_8; break;
 				}
 
+				//check if a valid message is received.
 				bReadEnable[iPort] = 	(serialPorts[iPort].cInBuf[0] == MOTORDRIVER_START_OF_FRAME) 
 										&& (serialPorts[iPort].cInBuf[1] == MOTORDRIVER_TYPE_RECEIVE) 
 										&& (serialPorts[iPort].cInBuf[2] == MOTORDRIVER_CMD_RECEIVE);
@@ -393,18 +401,18 @@ int main(int argc, char **argv  )
 	//O_NOCTTY = the port never becomes the controlling terminal of the process
 	//O_NDELAY = use non-blocking i/o. on some system this is also means the rs232 dcd signal line is ignored.	
 	if(OPEN_WITH_NONBLOCK){
-		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);
 		ROS_INFO("Serial port 5 are connected to hardware");
-		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR | O_NONBLOCK);
 		ROS_INFO("Serial port 7 are connected to hardware");
-		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR | O_NONBLOCK);
 		ROS_INFO("Serial port 8 are connected to hardware");
 	}else{
-		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_5] = open("/dev/ttyS5", O_RDWR);
 		ROS_INFO("Serial port 5 are connected to hardware");
-		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_7] = open("/dev/ttyS7", O_RDWR);
 		ROS_INFO("Serial port 7 are connected to hardware");
-		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR);//O_RDWR | O_NOCTTY | O_SYNC);
+		Sobject.iSerialPortId[SERIAL_PORT_8] = open("/dev/ttyS8", O_RDWR);
 		ROS_INFO("Serial port 8 are connected to hardware");
 	}
 
@@ -430,8 +438,8 @@ int main(int argc, char **argv  )
 				newkey.c_iflag = IGNPAR;
 				newkey.c_oflag = 0;
 				newkey.c_lflag = 0;       //ICANON;
-				newkey.c_cc[VMIN]=0;
-				newkey.c_cc[VTIME]=0;
+				newkey.c_cc[VMIN]= RS422_VMIN;
+				newkey.c_cc[VTIME]= RS422_VTIME;
 				tcflush(Sobject.iSerialPortId[iPort], TCIFLUSH);
 				tcsetattr(Sobject.iSerialPortId[iPort],TCSANOW,&newkey);
 				ROS_INFO("Setting options completed for port %i", (iPort +1));
@@ -448,8 +456,9 @@ int main(int argc, char **argv  )
 	while(ros::ok() )
 	{	
 		iWhileCounter++;
-		//Choose with which rate the RS422 port will be read.
 
+		//Choose with which rate the RS422 port will be read.
+		//after 300 ms the ports start reading. otherwise there will be a lot of errors.
 		if((iWhileCounter > 300) && (iWhileCounter % (ROS_LOOP_RATE_HZ/READ_RS422_INTERVAL_HZ) == 0)){
 			//check if read data is on
 			if(READ_RS422_ON){

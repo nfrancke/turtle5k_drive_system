@@ -21,6 +21,9 @@ using namespace std;
 #define OPEN_WITH_NONBLOCK 	0
 #define READ_ON				1
 
+#define KP 					100
+#define KI 					0
+
 /* Call this just when main() does its initialization. */
 /* Note: kbhit will call this if it hasn't been done yet. */
 void kbinit();
@@ -38,7 +41,7 @@ static struct termios original_tty;
 int main(int argc, char *argv[])
 {
 	//init variables
-	char device_name[] = "/dev/ttyS5";
+	char device_name[] = "/dev/ttyS8";
 	int i = 0;
 	int i2= 0;
 	int send_error = 0;
@@ -61,7 +64,7 @@ int main(int argc, char *argv[])
 	// -----------------------------------------------------------------------------------
 	
 	//	Check if the number is bigger or smaller than what we can actually send to the controler ( wheelVel >= 0x01 && wheelVel <= 0xFF ).
-	if(wheelVel>255) wheelVel=255;
+	if(wheelVel>1100) wheelVel=1100;
 	if(wheelVel<1) wheelVel=1;
 	// -----------------------------------------------------------------------------------
 	
@@ -116,6 +119,8 @@ int main(int argc, char *argv[])
 			//	Here we convert the wheelVel's value accordingly and then send it to both of the controllers.
 			send_bytes[3]=(char)(wheelVel & 0xFF);
 			send_bytes[4]=(char)((wheelVel >> 8) & 0xFF);
+			//send_bytes[5]=(char)(KP & 0xFF);
+			//send_bytes[6]=(char)(KI & 0xFF);
 		
 			//send
 			number_of_bytes_to_send = sizeof(send_bytes);

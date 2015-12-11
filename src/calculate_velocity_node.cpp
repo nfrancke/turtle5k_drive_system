@@ -15,10 +15,10 @@ Pre:
 Twist message on topic motorspeed_set
 
 Post:
-Float32Multiarray on topic mcWheelVelocityMps. THe 3 rpm values for the motor will be written in array[5], array[7] and array[8]
+Float32Multiarray on topic mcWheelVelocityMps. THe 3 rpm values for the motor will be written in array[4], array[6] and array[7]
 
 Writer 		: Niek Francke
-date 		: 18-11-2015
+date 		: 11-12-2015
 ********************************************************************************************************************************************/
 
 #include <iostream>
@@ -93,6 +93,7 @@ public:
 		float fRadiusOmniwheel = RADIUS_OMNI_WHEEL;	//this is needed, because the define won't work in a formule. (i don't know why)
 		float fMotorToWheelTransmissionRatio = MOTOR_TO_WHEEL_TRANSMISSION_RATIO;	
 
+		//send data
 		if(iTwistMessageReceivedCounter % DEBUG_SPEED == 0 ){
 			ROS_DEBUG("x = %f", fX);
 			ROS_DEBUG("y = %f", fY);
