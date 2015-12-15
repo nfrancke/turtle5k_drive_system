@@ -63,7 +63,7 @@ struct termios oldkey, newkey;       //place tor old and new port settings for k
 Start defining class Subscribe
 ********************************************************************************************************************************************/
 class Subscribe
-{
+{	
 public:
 	struct Output{ char cOutBuf[8]; int iSpeed; char cInBuf[8];};	//data for serialports
 	Output serialPorts[10];							
@@ -75,7 +75,7 @@ public:
 	///////////////////////////////////////////////////////////////////////////////////////////
 	//Function: create class and read params
 	//pre: 	-
-	//post: iConvertFactor will be 0 if there is no param readed.
+	//post: iConvertFactor will be 0 if there is no param read.
 	///////////////////////////////////////////////////////////////////////////////////////////
 	Subscribe(ros::NodeHandle nh)
 	{
@@ -95,7 +95,7 @@ public:
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iConvertFactor);
-			ROS_INFO("parameter iConvertFactor is readed and has value :%i", iConvertFactor);
+			ROS_INFO("parameter iConvertFactor is read and has value :%i", iConvertFactor);
 		}else{
 			ROS_ERROR("Parameter iConvertFactor does not exist");
 			iConvertFactor = 0;
@@ -106,7 +106,7 @@ public:
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iMaxPulseSpeed);
-			ROS_INFO("parameter iMaxPulseSpeed is readed and has value :%i", iMaxPulseSpeed);
+			ROS_INFO("parameter iMaxPulseSpeed is read and has value :%i", iMaxPulseSpeed);
 		}else{
 			ROS_ERROR("Parameter iMaxPulseSpeed does not exist");
 			iMaxPulseSpeed = 0;
@@ -117,7 +117,7 @@ public:
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iMinPulseSpeed);
-			ROS_INFO("parameter iMinPulseSpeed is readed and has value :%i", iMinPulseSpeed);
+			ROS_INFO("parameter iMinPulseSpeed is read and has value :%i", iMinPulseSpeed);
 		}else{
 			ROS_ERROR("Parameter iMinPulseSpeed does not exist");
 			iMinPulseSpeed = 0;
@@ -128,7 +128,7 @@ public:
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iKp);
-			ROS_INFO("parameter iOmniWheelMotorDriversPfactor is readed and has value :%i", iKp);
+			ROS_INFO("parameter iOmniWheelMotorDriversPfactor is read and has value :%i", iKp);
 		}else{
 			ROS_ERROR("Parameter iOmniWheelMotorDriversPfactor does not exist. Default value is taken");
 			iKp = MOTORDRIVER_KP_DEFAULT;
@@ -139,7 +139,7 @@ public:
 		//check if param is defined.
 		if (nh.hasParam(sParamName)){
 			nh.getParam(sParamName, iKi);
-			ROS_INFO("parameter iOmniWheelMotorDriversIfactor is readed and has value :%i", iKi);
+			ROS_INFO("parameter iOmniWheelMotorDriversIfactor is read and has value :%i", iKi);
 		}else{
 			ROS_ERROR("Parameter iOmniWheelMotorDriversIfactor does not exist. Default value is taken");
 			iKi = MOTORDRIVER_KI_DEFAULT;
@@ -283,9 +283,9 @@ public:
 
 		if((iReceiveError != 0) && (iEncoderDataReceiverCounter % DEBUG_SPEED == 0)){
 				ROS_INFO("Total receive errors = %i", iReceiveError);
-				ROS_INFO("first pass with receive send = %i", iFirstReceiveError);
+				ROS_INFO("First pass with receive send = %i", iFirstReceiveError);
 				ROS_INFO("Number of wanted receive bytes = %i", iWantedNumberOfReceiveBytes); 
-				ROS_INFO("Number of receiv bytes = %i", iNumberOfReceiveBytes);
+				ROS_INFO("Number of received bytes = %i", iNumberOfReceiveBytes);
 		}
 
 		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){		
@@ -383,7 +383,7 @@ end of defining class Subscribe
 Start of main
 ********************************************************************************************************************************************/
 int main(int argc, char **argv  )
-{
+{	
 	//initialize ROS
 	ros::init(argc, argv, "mcMotorDriver");
 	
@@ -393,6 +393,7 @@ int main(int argc, char **argv  )
 	//create class
 	Subscribe Sobject(nh);
 	
+
 	ROS_INFO("Serial Ports will be initialized");
 	//ROS_DEBUG("O_NONBLOCK = %i", O_NONBLOCK);
 
