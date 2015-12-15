@@ -288,8 +288,9 @@ public:
 				ROS_INFO("Number of received bytes = %i", iNumberOfReceiveBytes);
 		}
 
-		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){		
-			int iEncoderData;
+		if(iSerialNewData[SERIAL_PORT_5] && iSerialNewData[SERIAL_PORT_7] && iSerialNewData[SERIAL_PORT_8]){	
+
+			int16_t iEncoderData;
 
 			if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0){
 				ROS_DEBUG("data encoder port 5:0x%x%x", serialPorts[SERIAL_PORT_5].cInBuf[4],serialPorts[SERIAL_PORT_5].cInBuf[3]);
@@ -324,22 +325,39 @@ public:
 				//put speedvalues into array
 				msg.data.clear();
 				msg.data.push_back(0);
-				msg.data.push_back(0);
-				msg.data.push_back(0);
-				msg.data.push_back(0);
-				iEncoderData = (serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_5].cInBuf[3]);
-				//ROS_INFO("encoder data = %i", iEncoderData);
+
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_5].cInBuf[6] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_5].cInBuf[5]);
+				ROS_INFO("encoder data2.5 = %i", iEncoderData);
 				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
 				msg.data.push_back(iEncoderData);
-				msg.data.push_back(0);
-				iEncoderData = (serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_7].cInBuf[3]);
+
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_7].cInBuf[6] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_7].cInBuf[5]);
+				ROS_INFO("encoder data2.7 = %i", iEncoderData);
 				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
 				msg.data.push_back(iEncoderData);
-				//ROS_INFO("encoder data = %i", iEncoderData);
-				iEncoderData = (serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | (serialPorts[SERIAL_PORT_8].cInBuf[3]);		
+
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_8].cInBuf[6] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_8].cInBuf[5]);
+				ROS_INFO("encoder data2.8 = %i", iEncoderData);
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_5].cInBuf[4] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_5].cInBuf[3]);
+				ROS_INFO("encoder data1.5 = %i", iEncoderData);
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 5:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+
+				msg.data.push_back(0);
+
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_7].cInBuf[4] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_7].cInBuf[3]);
+				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 7:%i", iEncoderData);
+				msg.data.push_back(iEncoderData);
+
+				ROS_INFO("encoder data1.7 = %i", iEncoderData);
+				iEncoderData = ((unsigned char)serialPorts[SERIAL_PORT_8].cInBuf[4] << 8) | ((unsigned char)serialPorts[SERIAL_PORT_8].cInBuf[3]);		
 				if(iEncoderDataReceiverCounter % DEBUG_SPEED == 0) ROS_INFO("data encoder wiel 8:%i", iEncoderData);
 				msg.data.push_back(iEncoderData);
-				//ROS_INFO("encoder data = %i", iEncoderData);
+
+				ROS_INFO("encoder data1.8 = %i", iEncoderData);
 				msg.data.push_back(0);
 
 				//send message
@@ -460,7 +478,7 @@ int main(int argc, char **argv  )
 
 		//Choose with which rate the RS422 port will be read.
 		//after 300 ms the ports start reading. otherwise there will be a lot of errors.
-		if((iWhileCounter > 300) && (iWhileCounter % (ROS_LOOP_RATE_HZ/READ_RS422_INTERVAL_HZ) == 0)){
+		if((iWhileCounter >  1000) && (iWhileCounter % (ROS_LOOP_RATE_HZ/READ_RS422_INTERVAL_HZ) == 0)){
 			//check if read data is on
 			if(READ_RS422_ON){
 				Sobject.readSerialPort();
